@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Aplicativo de Rotas de Inspeção de Manutenção Preventiva">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Rota de Inspeção - Manutenção Preventiva</title>
+  
+  <!-- Manifest -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="shortcut icon" href="icon.svg" type="image/svg+xml">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Firebase SDKs (Compat mode for simple CDN integration) -->
+  <script defer src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+  
+  <!-- HTML5 QR Code Library (QR Code Scanner) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" integrity="sha512-r1Znh5wGch198F0Vw6Bv06zDye2mPki1a1Z0m5wI2nO0jM49jW8E18sE09aW4j48W9F0p1m5w4U9nL0p1m5w4Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+
+  <!-- Dynamic Header -->
+  <header id="app-header" style="display: none;">
+    <div class="logo-container">
+      <img src="icon.svg" alt="Logo Rota de Inspeção">
+      <h1>Rota de Inspeção</h1>
+    </div>
+    <div class="header-actions">
+      <div id="db-status"></div>
+      <div id="logged-user-badge" class="user-badge"></div>
+      <div id="logged-user-name" style="font-weight: 500; font-size: 0.95rem;"></div>
+      <button id="header-config-btn" class="config-toggle" onclick="openConfigModal()" title="Configurações do Firebase">⚙️</button>
+      <button class="btn btn-secondary btn-sm" onclick="logout()">Sair</button>
+    </div>
+  </header>
+
+  <!-- Main App View Router -->
+  <main>
+    
+    <!-- 1. LOGIN PAGE -->
+    <section id="login-page" class="page active">
+      <div class="login-container">
+        <div class="login-card">
+          <div class="login-header">
+            <h2>Bem-vindo</h2>
+            <p>Faça login para gerenciar ou executar as rotas de inspeção.</p>
+          </div>
+          <form id="login-form">
+            <div class="form-group">
+              <label for="login-username">Usuário</label>
+              <input type="text" id="login-username" class="input-control" placeholder="Digite seu usuário" required autocomplete="username">
+            </div>
+            <div class="form-group">
+              <label for="login-password">Senha</label>
+              <input type="password" id="login-password" class="input-control" placeholder="Digite sua senha" required autocomplete="current-password">
+            </div>
+            <div id="login-error" class="badge badge-danger" style="display: none; width: 100%; padding: 0.75rem; margin-bottom: 1rem; border-radius: var(--border-radius-md);"></div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; padding: 0.85rem;">Entrar</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. ADMIN PAGES (GRID LAYOUT WITH SIDEBAR) -->
+    <section id="admin-dashboard" class="page">
+      <div class="admin-grid">
+        <!-- Sidebar Navigation -->
+        <aside class="admin-sidebar">
+          <button class="sidebar-btn active" onclick="showPage('admin-activities')">📋 Atividades</button>
+          <button class="sidebar-btn" onclick="showPage('admin-users'); loadAdminUsers();">👥 Técnicos</button>
+          <button class="sidebar-btn" onclick="showPage('admin-history'); loadAdminHistory();">📜 Histórico</button>
+        </aside>
+
+        <!-- Dynamic Admin Content Pane -->
+        <div class="admin-content-pane">
+          
+          <!-- Admin View: Activities -->
+          <div id="admin-activities" class="admin-sub-page active">
+            <div class="section-header">
+              <h2>Atividades de Inspeção</h2>
+              <button class="btn btn-primary" onclick="openActivityModal()">+ Nova Atividade</button>
+            </div>
+            <div id="activities-cards-grid" class="grid-cards">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Admin View: Users (Technicians) -->
+          <div id="admin-users" class="admin-sub-page">
+            <div class="section-header">
+              <h2>Gerenciar Técnicos</h2>
+              <button class="btn btn-primary" onclick="openUserModal()">+ Novo Técnico</button>
+            </div>
+            <div id="users-cards-grid" class="grid-cards">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Admin View: History Logs -->
+          <div id="admin-history" class="admin-sub-page">
+            <div class="section-header">
+              <h2>Histórico de Inspeções Realizadas</h2>
+            </div>
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data/Hora</th>
+                    <th>Atividade</th>
+                    <th>Técnico</th>
+                    <th>Comentário do Técnico</th>
+                  </tr>
+                </thead>
+                <tbody id="history-table-body">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. TECHNICIAN PAGE -->
+    <section id="tech-home" class="page">
+      <div class="tech-container">
+        <!-- Filters Area -->
+        <div class="filter-bar">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="filter-period">Período de Inspeção</label>
+            <select id="filter-period" class="input-control select-control" onchange="applyTechFilters()">
+              <option value="all">Ver Todas Pendentes</option>
+              <option value="today">Vencendo Hoje</option>
+              <option value="week">Vencendo nos próximos 7 dias</option>
+              <option value="month">Vencendo nos próximos 30 dias</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="filter-date">Filtrar por data limite</label>
+            <input type="date" id="filter-date" class="input-control" onchange="applyTechFilters()">
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary" onclick="clearTechFilters()">Limpar Filtros</button>
+          </div>
+        </div>
+
+        <!-- Grid of Assigned Activities -->
+        <div class="section-header" style="margin-bottom: 0;">
+          <h2>Minhas Atividades de Inspeção</h2>
+        </div>
+        <div id="tech-activities-grid" class="grid-cards">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. ACTIVITY EXECUTION & QR CODE PAGE -->
+    <section id="tech-execute" class="page">
+      <div class="execution-card">
+        <div class="section-header">
+          <h2 id="exec-activity-title">Nome da Atividade</h2>
+          <button class="btn btn-secondary btn-sm" onclick="showPage('tech-home'); loadTechnicianActivities();">Voltar</button>
+        </div>
+
+        <h3>Instruções de Execução:</h3>
+        <div id="exec-instruction" class="instruction-box">
+          <!-- Dynamically populated -->
+        </div>
+
+        <div class="form-group">
+          <label for="exec-comment">Comentário / Observação da Inspeção</label>
+          <textarea id="exec-comment" class="input-control" rows="3" placeholder="Insira alguma observação sobre as condições do equipamento (opcional)"></textarea>
+        </div>
+
+        <!-- QR Scanner Interface -->
+        <div class="qr-scanner-section">
+          <h4>Validação de QR Code no Local</h4>
+          <p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">
+            Para concluir a atividade, aponte a câmera para o QR Code correspondente ou digite o código manual.
+          </p>
+          <div style="font-size: 0.85rem; margin-bottom: 0.5rem;">
+            Código esperado: <strong id="exec-qrcode-expected" class="badge badge-info"></strong>
+          </div>
+
+          <!-- Camera Screen Placeholder -->
+          <div id="qr-scanner-visual" class="qr-placeholder">
+            <div class="scanner-laser"></div>
+            <div id="qr-reader" style="width: 100%;"></div>
+            <span style="position: absolute; pointer-events: none;">Aguardando ativação da câmera...</span>
+          </div>
+
+          <!-- Scan feedback -->
+          <div id="scanner-feedback" class="badge" style="display: none; padding: 0.5rem 1rem; width: 100%; text-align: center;"></div>
+
+          <div style="display: flex; gap: 0.75rem; width: 100%; margin-top: 0.5rem; justify-content: center;">
+            <button id="btn-start-scanner" class="btn btn-primary" onclick="startScanner()">Ativar Câmera</button>
+            <button id="btn-show-manual" class="btn btn-secondary" onclick="showManualEntry()">Digitar Código</button>
+          </div>
+
+          <!-- Manual Code Entry Form -->
+          <div id="manual-entry-container" style="display: none; width: 100%; margin-top: 1rem;">
+            <div class="form-group">
+              <label for="exec-manual-code">Código do QR Code</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <input type="text" id="exec-manual-code" class="input-control" placeholder="Digite o código gravado no local">
+                <button class="btn btn-success" onclick="handleManualSubmit()">Validar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: ADD/EDIT USER (ADMIN ONLY) -->
+  <div id="user-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="user-modal-title">Novo Técnico</h3>
+        <button class="close-btn" onclick="closeUserModal()">&times;</button>
+      </div>
+      <form id="user-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="user-username">Usuário (login)</label>
+            <input type="text" id="user-username" class="input-control" placeholder="Ex: joao" required>
+          </div>
+          <div class="form-group">
+            <label for="user-name">Nome Completo</label>
+            <input type="text" id="user-name" class="input-control" placeholder="Ex: João Silva" required>
+          </div>
+          <div class="form-group">
+            <label for="user-password">Senha</label>
+            <input type="text" id="user-password" class="input-control" placeholder="Digite a senha provisória" required>
+          </div>
+          <div class="form-group">
+            <label for="user-role">Função / Nível de Acesso</label>
+            <select id="user-role" class="input-control select-control">
+              <option value="tecnico">Técnico (Acesso operacional)</option>
+              <option value="admin">Administrador (Acesso total)</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD/EDIT ACTIVITY (ADMIN ONLY) -->
+  <div id="activity-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="activity-modal-title">Nova Atividade</h3>
+        <button class="close-btn" onclick="closeActivityModal()">&times;</button>
+      </div>
+      <form id="activity-form">
+        <input type="hidden" id="activity-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="activity-title">Título da Atividade</label>
+            <input type="text" id="activity-title" class="input-control" placeholder="Ex: Inspeção do Torno CNC" required>
+          </div>
+          <div class="form-group">
+            <label for="activity-description">Instruções Detalhadas (Passo a Passo)</label>
+            <textarea id="activity-description" class="input-control" rows="4" placeholder="Descreva os itens de checagem da manutenção preventiva..." required></textarea>
+          </div>
+          <div class="form-group">
+            <label for="activity-periodicity">Periodicidade (Repetir a cada X dias)</label>
+            <input type="number" id="activity-periodicity" class="input-control" placeholder="Ex: 7" min="1" required>
+          </div>
+          <div class="form-group">
+            <label for="activity-qrcode">Código Identificador do QR Code</label>
+            <input type="text" id="activity-qrcode" class="input-control" placeholder="Código colado na máquina (ex: CNC-01)" required>
+          </div>
+          <div class="form-group">
+            <label>Atribuir aos Técnicos:</label>
+            <div id="activity-tech-checkboxes" class="checkbox-list">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: FIREBASE INTEGRATION SETUP -->
+  <div id="config-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Configuração do Firebase</h3>
+        <button class="close-btn" onclick="closeConfigModal()">&times;</button>
+      </div>
+      <form id="firebase-config-form">
+        <div class="modal-body">
+          <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Preencha os campos abaixo com as credenciais do seu projeto Firebase Firestore para ativar a sincronização em nuvem. Deixe os campos em branco e clique em salvar para voltar a utilizar o <strong>Armazenamento Local (LocalStorage)</strong>.
+          </p>
+          <div class="form-group">
+            <label for="fb-api-key">API Key</label>
+            <input type="text" id="fb-api-key" class="input-control" placeholder="AIzaSy...">
+          </div>
+          <div class="form-group">
+            <label for="fb-auth-domain">Auth Domain</label>
+            <input type="text" id="fb-auth-domain" class="input-control" placeholder="projeto.firebaseapp.com">
+          </div>
+          <div class="form-group">
+            <label for="fb-project-id">Project ID</label>
+            <input type="text" id="fb-project-id" class="input-control" placeholder="projeto-12345">
+          </div>
+          <div class="form-group">
+            <label for="fb-storage-bucket">Storage Bucket</label>
+            <input type="text" id="fb-storage-bucket" class="input-control" placeholder="projeto.appspot.com">
+          </div>
+          <div class="form-group">
+            <label for="fb-messaging-sender-id">Messaging Sender ID</label>
+            <input type="text" id="fb-messaging-sender-id" class="input-control" placeholder="8192749...">
+          </div>
+          <div class="form-group">
+            <label for="fb-app-id">App ID</label>
+            <input type="text" id="fb-app-id" class="input-control" placeholder="1:81927:web:abcd...">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeConfigModal()">Fechar</button>
+          <button type="submit" class="btn btn-primary">Salvar Configuração</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer Banner -->
+  <footer>
+    <p>Criado por @ Cristiano Sbabo &copy; 2026. Todos os direitos reservados.</p>
+  </footer>
+
+  <!-- Application Logic JS -->
+  <script src="app.js"></script>
+</body>
+</html>

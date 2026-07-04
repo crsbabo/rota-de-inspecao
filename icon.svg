@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <drop-shadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.3" />
+    </filter>
+  </defs>
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="128" fill="url(#grad)" />
+  
+  <!-- Outer glowing ring -->
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="none" stroke="#60a5fa" stroke-width="8" stroke-opacity="0.3" />
+  
+  <g filter="url(#shadow)" transform="translate(106, 96)">
+    <!-- Clipboard/Shield Board -->
+    <rect x="30" y="50" width="240" height="300" rx="32" fill="#ffffff" />
+    
+    <!-- Clipboard Header Clip -->
+    <path d="M100,50 L200,50 C210,50 210,30 200,30 L180,30 C175,20 165,10 150,10 C135,10 125,20 120,30 L100,30 C90,30 90,50 100,50 Z" fill="#475569" />
+    
+    <!-- Gear integrated on the bottom right of the clipboard -->
+    <g transform="translate(230, 290)">
+      <circle cx="0" cy="0" r="45" fill="#1e293b" />
+      <circle cx="0" cy="0" r="18" fill="#ffffff" />
+      <!-- Teeth of gear -->
+      <path d="M-8,-55 L8,-55 L12,-40 L-12,-40 Z" fill="#1e293b" />
+      <path d="M-8,55 L8,55 L12,40 L-12,40 Z" fill="#1e293b" transform="rotate(180)" />
+      <path d="M-8,-55 L8,-55 L12,-40 L-12,-40 Z" fill="#1e293b" transform="rotate(45)" />
+      <path d="M-8,-55 L8,-55 L12,-40 L-12,-40 Z" fill="#1e293b" transform="rotate(90)" />
+      <path d="M-8,-55 L8,-55 L12,-40 L-12,-40 Z" fill="#1e293b" transform="rotate(135)" />
+      <path d="M-8,-55 L8,-55 L12,-40 L-12,-40 Z" fill="#1e293b" transform="rotate(225)" />
+      <path d="M-8,-55 L8,-55 L12,-40 L-12,-40 Z" fill="#1e293b" transform="rotate(270)" />
+      <path d="M-8,-55 L8,-55 L12,-40 L-12,-40 Z" fill="#1e293b" transform="rotate(315)" />
+    </g>
+    
+    <!-- Clipboard Check Lines -->
+    <rect x="70" y="110" width="160" height="12" rx="6" fill="#cbd5e1" />
+    <rect x="70" y="140" width="160" height="12" rx="6" fill="#cbd5e1" />
+    <rect x="70" y="170" width="110" height="12" rx="6" fill="#cbd5e1" />
+    
+    <!-- Large Checkmark -->
+    <path d="M70,260 L110,300 L200,210" fill="none" stroke="#22c55e" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
