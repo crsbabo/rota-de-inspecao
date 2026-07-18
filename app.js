@@ -12,6 +12,22 @@ let currentExecutingActivity = null;
 let db = null;
 let useFirebase = false;
 
+// =====================================================
+// FIREBASE CONFIG — conectado automaticamente em
+// qualquer dispositivo sem necessidade de configuração
+// =====================================================
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAGv6HsPs35R4mUXPqhpLkizy1dNRpkkuU",
+  authDomain: "rotas-de-inspecao.firebaseapp.com",
+  projectId: "rotas-de-inspecao",
+  storageBucket: "rotas-de-inspecao.firebasestorage.app",
+  messagingSenderId: "917565341973",
+  appId: "1:917565341973:web:326999b01b419b031c291c"
+};
+
+// Chave secreta de proteção das regras do Firestore (Opção A)
+const APP_SECRET_KEY = 'sulcorte_inspec_2026';
+
 // Default Mock Data
 const DEFAULT_USERS = [
   { username: 'admin', password: '123', name: 'Administrador', role: 'admin', assignments: [] },
@@ -53,27 +69,26 @@ function getFutureDate(daysOffset) {
 // DATABASE & STORAGE LAYER (LocalStorage / Firebase)
 // ----------------------------------------------------
 
-// Initialize Firebase dynamically if configuration exists
+// Inicializa Firebase automaticamente com config embutida
 function loadFirebaseConfig() {
-  const configStr = localStorage.getItem('inspec_firebase_config');
-  if (configStr) {
-    try {
-      const config = JSON.parse(configStr);
-      if (config.apiKey && config.projectId) {
-        firebase.initializeApp(config);
-        db = firebase.firestore();
-        useFirebase = true;
-        console.log("Firebase Firestore ativado com sucesso!");
-        document.getElementById('db-status').innerHTML = '<span class="badge badge-success">Firebase Online</span>';
-        return true;
-      }
-    } catch (e) {
-      console.error("Erro ao inicializar o Firebase. Usando LocalStorage local.", e);
+  try {
+    // Verifica se já foi inicializado anteriormente
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
     }
+    db = firebase.firestore();
+    useFirebase = true;
+    console.log("Firebase Firestore conectado automaticamente!");
+    const statusEl = document.getElementById('db-status');
+    if (statusEl) statusEl.innerHTML = '<span class="badge badge-success">Firebase Online</span>';
+    return true;
+  } catch (e) {
+    console.error("Erro ao inicializar Firebase. Usando LocalStorage.", e);
+    useFirebase = false;
+    const statusEl = document.getElementById('db-status');
+    if (statusEl) statusEl.innerHTML = '<span class="badge badge-warning">Modo Local</span>';
+    return false;
   }
-  document.getElementById('db-status').innerHTML = '<span class="badge badge-info">Armazenamento Local</span>';
-  useFirebase = false;
-  return false;
 }
 
 // Check and Initialize Storage
@@ -113,41 +128,64 @@ function initLocalStorageFallback() {
 }
 
 async function syncDataFromFirebase() {
-  // Load Users
-  const usersSnapshot = await db.collection('users').get();
+  // Load Users - filter by security key
+  const usersSnapshot = await db.collection('users')
+    .where('appSecretKey', '==', APP_SECRET_KEY)
+    .get();
   if (usersSnapshot.empty) {
     // Seed default users to Firebase
     for (let u of DEFAULT_USERS) {
-      await db.collection('users').doc(u.username).set(u);
+      const docData = { ...u, appSecretKey: APP_SECRET_KEY };
+      await db.collection('users').doc(u.username).set(docData);
     }
     usersList = [...DEFAULT_USERS];
   } else {
-    usersList = usersSnapshot.docs.map(doc => doc.data());
+    usersList = usersSnapshot.docs.map(doc => {
+      const data = doc.data();
+      delete data.appSecretKey;
+      return data;
+    });
   }
 
-  // Load Activities
-  const actSnapshot = await db.collection('activities').get();
+  // Load Activities - filter by security key
+  const actSnapshot = await db.collection('activities')
+    .where('appSecretKey', '==', APP_SECRET_KEY)
+    .get();
   if (actSnapshot.empty) {
     for (let act of DEFAULT_ACTIVITIES) {
-      await db.collection('activities').doc(act.id).set(act);
+      const docData = { ...act, appSecretKey: APP_SECRET_KEY };
+      await db.collection('activities').doc(act.id).set(docData);
     }
     activitiesList = [...DEFAULT_ACTIVITIES];
   } else {
-    activitiesList = actSnapshot.docs.map(doc => doc.data());
+    activitiesList = actSnapshot.docs.map(doc => {
+      const data = doc.data();
+      delete data.appSecretKey;
+      return data;
+    });
   }
 
-  // Load History
-  const histSnapshot = await db.collection('history').orderBy('timestamp', 'desc').get();
-  historyList = histSnapshot.docs.map(doc => doc.data());
+  // Load History - filter by security key (without ordering to avoid Firestore Index errors)
+  const histSnapshot = await db.collection('history')
+    .where('appSecretKey', '==', APP_SECRET_KEY)
+    .get();
+  
+  // Map and sort in memory by timestamp descending
+  historyList = histSnapshot.docs.map(doc => {
+    const data = doc.data();
+    delete data.appSecretKey;
+    return data;
+  });
+  historyList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
 // Generic Save functions
 async function saveUsers() {
   try {
     if (useFirebase) {
-      // Firebase handles single updates usually, but for simplicity of this implementation we set
       for (let u of usersList) {
-        await db.collection('users').doc(u.username).set(u);
+        const docData = { ...u, appSecretKey: APP_SECRET_KEY };
+        await db.collection('users').doc(u.username).set(docData);
       }
     } else {
       localStorage.setItem('inspec_users', JSON.stringify(usersList));
@@ -163,7 +201,8 @@ async function saveActivities() {
   try {
     if (useFirebase) {
       for (let act of activitiesList) {
-        await db.collection('activities').doc(act.id).set(act);
+        const docData = { ...act, appSecretKey: APP_SECRET_KEY };
+        await db.collection('activities').doc(act.id).set(docData);
       }
     } else {
       localStorage.setItem('inspec_activities', JSON.stringify(activitiesList));
@@ -179,7 +218,8 @@ async function addHistoryRecord(record) {
   historyList.unshift(record);
   try {
     if (useFirebase) {
-      await db.collection('history').add(record);
+      const docData = { ...record, appSecretKey: APP_SECRET_KEY };
+      await db.collection('history').add(docData);
     } else {
       localStorage.setItem('inspec_history', JSON.stringify(historyList));
     }
