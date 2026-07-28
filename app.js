@@ -80,13 +80,13 @@ function loadFirebaseConfig() {
     useFirebase = true;
     console.log("Firebase Firestore conectado automaticamente!");
     const statusEl = document.getElementById('db-status');
-    if (statusEl) statusEl.innerHTML = '<span class="badge badge-success">Firebase Online</span>';
+    if (statusEl) statusEl.innerHTML = '<span class="badge badge-success">ONLINE</span>';
     return true;
   } catch (e) {
     console.error("Erro ao inicializar Firebase. Usando LocalStorage.", e);
     useFirebase = false;
     const statusEl = document.getElementById('db-status');
-    if (statusEl) statusEl.innerHTML = '<span class="badge badge-warning">Modo Local</span>';
+    if (statusEl) statusEl.innerHTML = '<span class="badge badge-warning">LOCAL</span>';
     return false;
   }
 }
@@ -102,7 +102,7 @@ async function initDatabase() {
     } catch (e) {
       console.error("Erro ao sincronizar com Firebase. Usando fallbacks.", e);
       useFirebase = false;
-      document.getElementById('db-status').innerHTML = '<span class="badge badge-warning">Firebase Erro (Local)</span>';
+      document.getElementById('db-status').innerHTML = '<span class="badge badge-warning">LOCAL</span>';
       alert("Erro ao conectar com o Firebase:\n" + e.message + "\n\nO aplicativo continuará funcionando temporariamente em modo Local (LocalStorage). Verifique se as Regras de Segurança (Security Rules) do Firestore estão configuradas para permitir gravação.");
       initLocalStorageFallback();
     }
@@ -286,15 +286,26 @@ function updateHeader() {
   }
   
   header.style.display = 'flex';
-  document.getElementById('logged-user-name').innerText = currentUser.name;
   
-  const badge = document.getElementById('logged-user-badge');
-  badge.className = 'user-badge ' + (currentUser.role === 'admin' ? 'admin' : 'tecnico');
-  badge.innerText = currentUser.role === 'admin' ? 'Administrador' : 'Técnico';
+  const nameEl = document.getElementById('logged-user-name');
+  const badgeEl = document.getElementById('logged-user-badge');
+
+  if (currentUser.role === 'admin') {
+    badgeEl.style.display = 'flex';
+    badgeEl.className = 'user-badge admin';
+    badgeEl.innerText = 'Administrador';
+    nameEl.style.display = 'none';
+    nameEl.innerText = '';
+  } else {
+    badgeEl.style.display = 'none';
+    badgeEl.innerText = '';
+    nameEl.style.display = 'none';
+    nameEl.innerText = '';
+  }
   
   const configBtn = document.getElementById('header-config-btn');
   if (configBtn) {
-    configBtn.style.display = currentUser.role === 'admin' ? 'block' : 'none';
+    configBtn.style.display = 'none';
   }
 }
 
