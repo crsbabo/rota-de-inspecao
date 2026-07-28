@@ -28,6 +28,12 @@ const FIREBASE_CONFIG = {
 // Chave secreta de proteção das regras do Firestore (Opção A)
 const APP_SECRET_KEY = 'sulcorte_inspec_2026';
 
+// VAPID Key para Firebase Cloud Messaging (Push Notifications)
+const FCM_VAPID_KEY = 'BM790p-_0RTCfUGid5jR817oiY53axShuSrB6wAqR6L_Dfjosgqb5_KQiO-Uy5hKBnzXcPl3rk9DeqLmRCSMazU';
+
+// FCM Messaging instance
+let messaging = null;
+
 // Default Mock Data
 const DEFAULT_USERS = [
   { username: 'admin', password: '123', name: 'Administrador', role: 'admin', assignments: [] },
@@ -79,6 +85,16 @@ function loadFirebaseConfig() {
     db = firebase.firestore();
     useFirebase = true;
     console.log("Firebase Firestore conectado automaticamente!");
+
+    // Initialize FCM Messaging
+    try {
+      messaging = firebase.messaging();
+      console.log('Firebase Messaging inicializado.');
+    } catch (msgErr) {
+      console.warn('Firebase Messaging não disponível neste navegador:', msgErr.message);
+      messaging = null;
+    }
+
     const statusEl = document.getElementById('db-status');
     if (statusEl) statusEl.innerHTML = '<span class="badge badge-success">ONLINE</span>';
     return true;
@@ -344,6 +360,7 @@ async function handleLogin(e) {
     } else {
       loadTechnicianActivities();
       showPage('tech-home');
+      checkNotificationBanner();
     }
   } else {
     errorMsg.innerText = 'Usuário ou senha incorretos.';
@@ -886,6 +903,97 @@ async function validateAndExecute(scannedCode) {
 
 
 // ----------------------------------------------------
+// FCM PUSH NOTIFICATIONS
+// ----------------------------------------------------
+
+/**
+ * Checks if the notification banner should be shown.
+ * Shows it only for technicians who haven't granted permission yet.
+ */
+function checkNotificationBanner() {
+  const banner = document.getElementById('notification-banner');
+  if (!banner) return;
+  if (!currentUser || currentUser.role !== 'tecnico') {
+    banner.style.display = 'none';
+    return;
+  }
+  if (!('Notification' in window) || !messaging) {
+    banner.style.display = 'none';
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    banner.style.display = 'none';
+    registerFcmToken();
+  } else if (Notification.permission === 'denied') {
+    banner.style.display = 'none';
+  } else {
+    banner.style.display = 'flex';
+  }
+}
+
+/**
+ * Called when technician clicks "Ativar Notificações".
+ * Requests browser permission and saves FCM token to Firestore.
+ */
+async function requestNotificationPermission() {
+  if (!messaging) {
+    alert('Notificações Push não são suportadas neste navegador.');
+    return;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      await registerFcmToken();
+      const banner = document.getElementById('notification-banner');
+      if (banner) banner.style.display = 'none';
+      alert('✅ Notificações ativadas! Você receberá alertas de inspeções pendentes todo dia útil às 07:35h.');
+    } else {
+      alert('Permissão de notificação negada. Você pode ativar novamente nas configurações do seu navegador.');
+    }
+  } catch (err) {
+    console.error('Erro ao solicitar permissão de notificação:', err);
+    alert('Erro ao solicitar permissão: ' + err.message);
+  }
+}
+
+/**
+ * Gets the FCM token for this device and saves it to the user's Firestore document.
+ */
+async function registerFcmToken() {
+  if (!messaging || !useFirebase || !currentUser) return;
+  try {
+    const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY });
+    if (token) {
+      console.log('FCM Token registrado:', token);
+      await db.collection('users').doc(currentUser.username).update({
+        fcmToken: token,
+        fcmTokenUpdatedAt: new Date().toISOString(),
+        appSecretKey: APP_SECRET_KEY
+      });
+      console.log('FCM Token salvo no Firestore com sucesso.');
+    } else {
+      console.warn('Nenhum FCM Token obtido. Verifique o Service Worker e a VAPID Key.');
+    }
+  } catch (err) {
+    console.error('Erro ao obter/salvar FCM Token:', err);
+  }
+}
+
+/**
+ * Returns the next business day (Mon-Fri) date string from a given date.
+ * Used to determine which day a weekend-due notification should fire.
+ * @param {Date} date
+ * @returns {string} YYYY-MM-DD
+ */
+function getNextBusinessDay(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun, 6=Sat
+  if (day === 6) d.setDate(d.getDate() + 2); // Sat -> Mon
+  else if (day === 0) d.setDate(d.getDate() + 1); // Sun -> Mon
+  return d.toISOString().split('T')[0];
+}
+
+// ----------------------------------------------------
 // HELPER FUNCTIONS
 // ----------------------------------------------------
 function formatDateBR(dateStr) {
@@ -931,6 +1039,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     } else {
       loadTechnicianActivities();
       showPage('tech-home');
+      checkNotificationBanner();
     }
   } else {
     logout();

@@ -1,0 +1,29 @@
+name: Notificações Diárias de Inspeção
+
+on:
+  schedule:
+    # 10:35 UTC = 07:35 BRT (Horário de Brasília) — Segunda a Sexta
+    - cron: '35 10 * * 1-5'
+  workflow_dispatch: # Permite disparo manual para testes
+
+jobs:
+  enviar-notificacoes:
+    name: Enviar Push de Inspeções Pendentes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: npm install firebase-admin
+
+      - name: Executar script de notificações
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/enviar-notificacoes.js

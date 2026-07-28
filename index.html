@@ -19,6 +19,7 @@
   <!-- Firebase SDKs (Compat mode for simple CDN integration) -->
   <script defer src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
   
   <!-- HTML5 QR Code Library (QR Code Scanner) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" integrity="sha512-r1Znh5wGch198F0Vw6Bv06zDye2mPki1a1Z0m5wI2nO0jM49jW8E18sE09aW4j48W9F0p1m5w4U9nL0p1m5w4Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -131,6 +132,18 @@
     <!-- 3. TECHNICIAN PAGE -->
     <section id="tech-home" class="page">
       <div class="tech-container">
+        <!-- Notification Permission Banner -->
+        <div id="notification-banner" class="card" style="display: none; margin-bottom: 1.25rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); align-items: center; justify-content: space-between; flex-direction: row; padding: 1rem 1.25rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 1.5rem;">🔔</span>
+            <div>
+              <strong style="display: block; font-size: 0.95rem;">Notificações Push do Sistema</strong>
+              <span style="font-size: 0.85rem; color: var(--text-secondary);">Receba alertas no celular às 07:35h nos dias úteis quando houver inspeções pendentes.</span>
+            </div>
+          </div>
+          <button id="btn-enable-notifications" class="btn btn-primary btn-sm" onclick="requestNotificationPermission()">Ativar Notificações</button>
+        </div>
+
         <!-- Filters Area -->
         <div class="filter-bar">
           <div class="form-group" style="margin-bottom: 0;">
