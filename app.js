@@ -292,8 +292,10 @@ function updateHeader() {
   badge.className = 'user-badge ' + (currentUser.role === 'admin' ? 'admin' : 'tecnico');
   badge.innerText = currentUser.role === 'admin' ? 'Administrador' : 'Técnico';
   
-  // Show/Hide admin settings button
-  document.getElementById('header-config-btn').style.display = currentUser.role === 'admin' ? 'block' : 'none';
+  const configBtn = document.getElementById('header-config-btn');
+  if (configBtn) {
+    configBtn.style.display = currentUser.role === 'admin' ? 'block' : 'none';
+  }
 }
 
 function logout() {
@@ -870,63 +872,7 @@ async function validateAndExecute(scannedCode) {
   }
 }
 
-// ----------------------------------------------------
-// FIREBASE CONFIG PANEL
-// ----------------------------------------------------
-function openConfigModal() {
-  const modal = document.getElementById('config-modal');
-  
-  // Load current values
-  document.getElementById('fb-api-key').value = '';
-  document.getElementById('fb-auth-domain').value = '';
-  document.getElementById('fb-project-id').value = '';
-  document.getElementById('fb-storage-bucket').value = '';
-  document.getElementById('fb-messaging-sender-id').value = '';
-  document.getElementById('fb-app-id').value = '';
 
-  const configStr = localStorage.getItem('inspec_firebase_config');
-  if (configStr) {
-    try {
-      const config = JSON.parse(configStr);
-      document.getElementById('fb-api-key').value = config.apiKey || '';
-      document.getElementById('fb-auth-domain').value = config.authDomain || '';
-      document.getElementById('fb-project-id').value = config.projectId || '';
-      document.getElementById('fb-storage-bucket').value = config.storageBucket || '';
-      document.getElementById('fb-messaging-sender-id').value = config.messagingSenderId || '';
-      document.getElementById('fb-app-id').value = config.appId || '';
-    } catch(e) {}
-  }
-
-  modal.classList.add('active');
-}
-
-function closeConfigModal() {
-  document.getElementById('config-modal').classList.remove('active');
-}
-
-async function saveFirebaseConfig(e) {
-  e.preventDefault();
-  const config = {
-    apiKey: document.getElementById('fb-api-key').value.trim(),
-    authDomain: document.getElementById('fb-auth-domain').value.trim(),
-    projectId: document.getElementById('fb-project-id').value.trim(),
-    storageBucket: document.getElementById('fb-storage-bucket').value.trim(),
-    messagingSenderId: document.getElementById('fb-messaging-sender-id').value.trim(),
-    appId: document.getElementById('fb-app-id').value.trim()
-  };
-
-  if (!config.apiKey || !config.projectId) {
-    // Clear configuration to revert to LocalStorage
-    localStorage.removeItem('inspec_firebase_config');
-    alert("Configurações limpas. O aplicativo voltará a utilizar o Armazenamento Local (LocalStorage).");
-    location.reload();
-    return;
-  }
-
-  localStorage.setItem('inspec_firebase_config', JSON.stringify(config));
-  alert("Configurações do Firebase salvas! Reiniciando aplicativo para aplicar as alterações.");
-  location.reload();
-}
 
 // ----------------------------------------------------
 // HELPER FUNCTIONS
@@ -983,5 +929,4 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('login-form').addEventListener('submit', handleLogin);
   document.getElementById('user-form').addEventListener('submit', saveUserForm);
   document.getElementById('activity-form').addEventListener('submit', saveActivityForm);
-  document.getElementById('firebase-config-form').addEventListener('submit', saveFirebaseConfig);
 });
