@@ -1,4 +1,4 @@
-/* Application Logic for Rota de InspeÃ§Ã£o PWA */
+/* Application Logic for Rota de Inspeção PWA */
 
 // Global State
 let currentUser = null;
@@ -13,8 +13,8 @@ let db = null;
 let useFirebase = false;
 
 // =====================================================
-// FIREBASE CONFIG â€” conectado automaticamente em
-// qualquer dispositivo sem necessidade de configuraÃ§Ã£o
+// FIREBASE CONFIG — conectado automaticamente em
+// qualquer dispositivo sem necessidade de configuração
 // =====================================================
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAGv6HsPs35R4mUXPqhpLkizy1dNRpkkuU",
@@ -25,7 +25,7 @@ const FIREBASE_CONFIG = {
   appId: "1:917565341973:web:326999b01b419b031c291c"
 };
 
-// Chave secreta de proteÃ§Ã£o das regras do Firestore (OpÃ§Ã£o A)
+// Chave secreta de proteção das regras do Firestore (Opção A)
 const APP_SECRET_KEY = 'sulcorte_inspec_2026';
 
 // VAPID Key para Firebase Cloud Messaging (Push Notifications)
@@ -43,23 +43,23 @@ const DEFAULT_USERS = [
 const DEFAULT_ACTIVITIES = [
   { 
     id: 'act-1', 
-    title: 'InspeÃ§Ã£o do Compressor Principal', 
-    description: '1. Verificar nÃ­vel de Ã³leo do cÃ¡rter.\n2. Purgar condensado do reservatÃ³rio de ar.\n3. Checar ruÃ­dos anormais e temperatura de trabalho.\n4. Confirmar se a pressÃ£o estÃ¡ regulada entre 6 e 8 bar.', 
+    title: 'Inspeção do Compressor Principal', 
+    description: '1. Verificar nível de óleo do cárter.\n2. Purgar condensado do reservatório de ar.\n3. Checar ruídos anormais e temperatura de trabalho.\n4. Confirmar se a pressão está regulada entre 6 e 8 bar.', 
     periodicity: 7, // em dias
     qrCode: 'COMP-01',
-    assignedTo: ['cristiano'], // usernames dos tÃ©cnicos
+    assignedTo: ['cristiano'], // usernames dos técnicos
     lastExecuted: null,
-    nextDueDate: getFutureDate(0) // DisponÃ­vel hoje
+    nextDueDate: getFutureDate(0) // Disponível hoje
   },
   { 
     id: 'act-2', 
-    title: 'LubrificaÃ§Ã£o das Guias do Torno', 
-    description: '1. Limpar cavacos e resÃ­duos das guias lineares.\n2. Aplicar Ã³leo lubrificante especÃ­fico nas guias.\n3. Verificar nÃ­vel do reservatÃ³rio do lubrificador automÃ¡tico.', 
+    title: 'Lubrificação das Guias do Torno', 
+    description: '1. Limpar cavacos e resíduos das guias lineares.\n2. Aplicar óleo lubrificante específico nas guias.\n3. Verificar nível do reservatório do lubrificador automático.', 
     periodicity: 3, 
     qrCode: 'TORNO-02',
     assignedTo: ['cristiano'],
     lastExecuted: null,
-    nextDueDate: getFutureDate(1) // DisponÃ­vel amanhÃ£
+    nextDueDate: getFutureDate(1) // Disponível amanhã
   }
 ];
 
@@ -78,7 +78,7 @@ function getFutureDate(daysOffset) {
 // Inicializa Firebase automaticamente com config embutida
 function loadFirebaseConfig() {
   try {
-    // Verifica se jÃ¡ foi inicializado anteriormente
+    // Verifica se já foi inicializado anteriormente
     if (!firebase.apps.length) {
       firebase.initializeApp(FIREBASE_CONFIG);
     }
@@ -91,7 +91,7 @@ function loadFirebaseConfig() {
       messaging = firebase.messaging();
       console.log('Firebase Messaging inicializado.');
     } catch (msgErr) {
-      console.warn('Firebase Messaging nÃ£o disponÃ­vel neste navegador:', msgErr.message);
+      console.warn('Firebase Messaging não disponível neste navegador:', msgErr.message);
       messaging = null;
     }
 
@@ -119,7 +119,7 @@ async function initDatabase() {
       console.error("Erro ao sincronizar com Firebase. Usando fallbacks.", e);
       useFirebase = false;
       document.getElementById('db-status').innerHTML = '<span class="badge badge-warning">LOCAL</span>';
-      alert("Erro ao conectar com o Firebase:\n" + e.message + "\n\nO aplicativo continuarÃ¡ funcionando temporariamente em modo Local (LocalStorage). Verifique se as Regras de SeguranÃ§a (Security Rules) do Firestore estÃ£o configuradas para permitir gravaÃ§Ã£o.");
+      alert("Erro ao conectar com o Firebase:\n" + e.message + "\n\nO aplicativo continuará funcionando temporariamente em modo Local (LocalStorage). Verifique se as Regras de Segurança (Security Rules) do Firestore estão configuradas para permitir gravação.");
       initLocalStorageFallback();
     }
   } else {
@@ -207,8 +207,8 @@ async function saveUsers() {
       localStorage.setItem('inspec_users', JSON.stringify(usersList));
     }
   } catch (e) {
-    console.error("Erro ao salvar usuÃ¡rios:", e);
-    alert("Erro ao salvar usuÃ¡rio no Firebase:\n" + e.message + "\n\nPor favor, configure as regras de seguranÃ§a (Security Rules) do seu Firestore para permitir escrita pÃºblica.");
+    console.error("Erro ao salvar usuários:", e);
+    alert("Erro ao salvar usuário no Firebase:\n" + e.message + "\n\nPor favor, configure as regras de segurança (Security Rules) do seu Firestore para permitir escrita pública.");
     throw e;
   }
 }
@@ -225,7 +225,7 @@ async function saveActivities() {
     }
   } catch (e) {
     console.error("Erro ao salvar atividades:", e);
-    alert("Erro ao salvar atividade no Firebase:\n" + e.message + "\n\nPor favor, configure as regras de seguranÃ§a (Security Rules) do seu Firestore para permitir escrita pÃºblica.");
+    alert("Erro ao salvar atividade no Firebase:\n" + e.message + "\n\nPor favor, configure as regras de segurança (Security Rules) do seu Firestore para permitir escrita pública.");
     throw e;
   }
 }
@@ -240,8 +240,8 @@ async function addHistoryRecord(record) {
       localStorage.setItem('inspec_history', JSON.stringify(historyList));
     }
   } catch (e) {
-    console.error("Erro ao salvar histÃ³rico:", e);
-    alert("Erro ao salvar registro de histÃ³rico no Firebase:\n" + e.message + "\n\nPor favor, configure as regras de seguranÃ§a (Security Rules) do seu Firestore para permitir escrita pÃºblica.");
+    console.error("Erro ao salvar histórico:", e);
+    alert("Erro ao salvar registro de histórico no Firebase:\n" + e.message + "\n\nPor favor, configure as regras de segurança (Security Rules) do seu Firestore para permitir escrita pública.");
     throw e;
   }
 }
@@ -363,7 +363,7 @@ async function handleLogin(e) {
       checkNotificationBanner();
     }
   } else {
-    errorMsg.innerText = 'UsuÃ¡rio ou senha incorretos.';
+    errorMsg.innerText = 'Usuário ou senha incorretos.';
     errorMsg.style.display = 'block';
   }
 }
@@ -387,7 +387,7 @@ function loadAdminUsers() {
           <div class="card-meta">@${user.username}</div>
         </div>
         <span class="badge ${user.role === 'admin' ? 'badge-warning' : 'badge-info'}">
-          ${user.role === 'admin' ? 'Admin' : 'TÃ©cnico'}
+          ${user.role === 'admin' ? 'Admin' : 'Técnico'}
         </span>
       </div>
       <div class="card-body">
@@ -414,7 +414,7 @@ function openUserModal(username = '') {
   document.getElementById('user-role').value = 'tecnico';
   
   if (username) {
-    title.innerText = 'Editar UsuÃ¡rio';
+    title.innerText = 'Editar Usuário';
     const user = usersList.find(u => u.username === username);
     if (user) {
       document.getElementById('user-username').value = user.username;
@@ -424,7 +424,7 @@ function openUserModal(username = '') {
       document.getElementById('user-role').value = user.role;
     }
   } else {
-    title.innerText = 'Novo UsuÃ¡rio';
+    title.innerText = 'Novo Usuário';
   }
   
   modal.classList.add('active');
@@ -442,7 +442,7 @@ async function saveUserForm(e) {
   const role = document.getElementById('user-role').value;
 
   if (!username || !name || !password) {
-    alert("Por favor, preencha todos os campos obrigatÃ³rios.");
+    alert("Por favor, preencha todos os campos obrigatórios.");
     return;
   }
 
@@ -465,10 +465,10 @@ async function saveUserForm(e) {
 
 async function deleteUser(username) {
   if (username === 'admin') {
-    alert("O usuÃ¡rio administrador principal nÃ£o pode ser excluÃ­do.");
+    alert("O usuário administrador principal não pode ser excluído.");
     return;
   }
-  if (confirm(`Tem certeza que deseja excluir o usuÃ¡rio @${username}?`)) {
+  if (confirm(`Tem certeza que deseja excluir o usuário @${username}?`)) {
     usersList = usersList.filter(u => u.username !== username);
     await saveUsers();
     
@@ -496,7 +496,7 @@ function loadAdminActivities() {
     const assignedNames = (act.assignedTo || []).map(username => {
       const u = usersList.find(user => user.username === username);
       return u ? u.name : username;
-    }).join(', ') || 'Nenhum tÃ©cnico';
+    }).join(', ') || 'Nenhum técnico';
 
     const card = document.createElement('div');
     card.className = 'card';
@@ -504,16 +504,16 @@ function loadAdminActivities() {
       <div class="card-header">
         <div>
           <div class="card-title">${act.title}</div>
-          <div class="card-meta">A cada ${act.periodicity} dias â€¢ QR: <strong>${act.qrCode}</strong></div>
+          <div class="card-meta">A cada ${act.periodicity} dias • QR: <strong>${act.qrCode}</strong></div>
         </div>
       </div>
       <div class="card-body">
         <p style="white-space: pre-line; margin-bottom: 0.75rem;">${act.description}</p>
         <div style="font-size: 0.8rem; color: var(--text-secondary);">
-          <strong>AtribuÃ­do a:</strong> ${assignedNames}
+          <strong>Atribuído a:</strong> ${assignedNames}
         </div>
         <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
-          <strong>PrÃ³xima InspeÃ§Ã£o:</strong> ${act.nextDueDate ? formatDateBR(act.nextDueDate) : 'Pendente'}
+          <strong>Próxima Inspeção:</strong> ${act.nextDueDate ? formatDateBR(act.nextDueDate) : 'Pendente'}
         </div>
       </div>
       <div class="card-actions">
@@ -592,7 +592,7 @@ async function saveActivityForm(e) {
   });
 
   if (!title || !periodicity || !qrCode) {
-    alert("Por favor, preencha os campos obrigatÃ³rios (TÃ­tulo, Periodicidade e CÃ³digo QR).");
+    alert("Por favor, preencha os campos obrigatórios (Título, Periodicidade e Código QR).");
     return;
   }
 
@@ -631,7 +631,7 @@ async function saveActivityForm(e) {
 }
 
 async function deleteActivity(id) {
-  if (confirm("Tem certeza que deseja excluir esta atividade de inspeÃ§Ã£o?")) {
+  if (confirm("Tem certeza que deseja excluir esta atividade de inspeção?")) {
     activitiesList = activitiesList.filter(a => a.id !== id);
     await saveActivities();
     loadAdminActivities();
@@ -646,7 +646,7 @@ function loadAdminHistory() {
   tbody.innerHTML = '';
 
   if (historyList.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">Nenhum histÃ³rico registrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">Nenhum histórico registrado.</td></tr>';
     return;
   }
 
@@ -744,7 +744,7 @@ function loadTechnicianActivities() {
         </div>
       </div>
       <div class="card-actions">
-        <button class="btn btn-primary btn-sm" onclick="openExecutionPage('${act.id}')">Executar InspeÃ§Ã£o</button>
+        <button class="btn btn-primary btn-sm" onclick="openExecutionPage('${act.id}')">Executar Inspeção</button>
       </div>
     `;
     container.innerHTML += card.outerHTML;
@@ -803,8 +803,8 @@ function startScanner() {
     onScanSuccess, 
     onScanFailure
   ).catch(err => {
-    console.error("Erro ao iniciar cÃ¢mera: ", err);
-    alert("NÃ£o foi possÃ­vel acessar a cÃ¢mera. VocÃª pode digitar o cÃ³digo QR manualmente.");
+    console.error("Erro ao iniciar câmera: ", err);
+    alert("Não foi possível acessar a câmera. Você pode digitar o código QR manualmente.");
     showManualEntry();
   });
 }
@@ -815,7 +815,7 @@ function stopScanner() {
       html5QrScanner = null;
       document.getElementById('btn-start-scanner').style.display = 'block';
     }).catch(err => {
-      console.error("Falha ao desligar cÃ¢mera: ", err);
+      console.error("Falha ao desligar câmera: ", err);
     });
   }
 }
@@ -847,7 +847,7 @@ function showManualEntry() {
 async function handleManualSubmit() {
   const enteredCode = document.getElementById('exec-manual-code').value.trim();
   if (!enteredCode) {
-    alert("Por favor, digite o cÃ³digo QR.");
+    alert("Por favor, digite o código QR.");
     return;
   }
   validateAndExecute(enteredCode);
@@ -859,7 +859,7 @@ async function validateAndExecute(scannedCode) {
 
   if (scannedCode === expectedCode) {
     feedback.className = 'badge badge-success';
-    feedback.innerText = 'CÃ³digo QR validado com sucesso! Registrando inspeÃ§Ã£o...';
+    feedback.innerText = 'Código QR validado com sucesso! Registrando inspeção...';
     feedback.style.display = 'inline-block';
 
     const comment = document.getElementById('exec-comment').value.trim();
@@ -888,14 +888,14 @@ async function validateAndExecute(scannedCode) {
     await saveActivities();
 
     setTimeout(() => {
-      alert("Atividade concluÃ­da com sucesso!");
+      alert("Atividade concluída com sucesso!");
       loadTechnicianActivities();
       showPage('tech-home');
     }, 1000);
 
   } else {
     feedback.className = 'badge badge-danger';
-    feedback.innerText = `CÃ³digo invÃ¡lido. Lido: "${scannedCode}". Esperado: "${expectedCode}".`;
+    feedback.innerText = `Código inválido. Lido: "${scannedCode}". Esperado: "${expectedCode}".`;
     feedback.style.display = 'inline-block';
   }
 }
@@ -907,52 +907,86 @@ async function validateAndExecute(scannedCode) {
 // ----------------------------------------------------
 
 /**
- * Checks if the notification banner should be shown.
- * Shows it only for technicians who haven't granted permission yet.
+ * Updates the notification status section on the technician page.
+ * Always visible — shows current status and enable button when needed.
  */
 function checkNotificationBanner() {
-  const banner = document.getElementById('notification-banner');
-  if (!banner) return;
+  const section = document.getElementById('notification-section');
+  const icon = document.getElementById('notif-status-icon');
+  const text = document.getElementById('notif-status-text');
+  const btn = document.getElementById('btn-enable-notifications');
+  
+  if (!section || !icon || !text || !btn) return;
+  
+  // Only show for technicians
   if (!currentUser || currentUser.role !== 'tecnico') {
-    banner.style.display = 'none';
+    section.style.display = 'none';
     return;
   }
-  if (!('Notification' in window) || !messaging) {
-    banner.style.display = 'none';
+  
+  section.style.display = 'block';
+
+  // Check if browser supports notifications
+  if (!('Notification' in window)) {
+    icon.textContent = '🚫';
+    text.textContent = 'Seu navegador não suporta notificações push.';
+    text.style.color = 'var(--text-secondary)';
+    btn.style.display = 'none';
     return;
   }
+
+  // Check if messaging is available
+  if (!messaging) {
+    icon.textContent = '⚠️';
+    text.textContent = 'Firebase Messaging não disponível. Verifique a conexão.';
+    text.style.color = '#f59e0b';
+    btn.style.display = 'none';
+    return;
+  }
+
   if (Notification.permission === 'granted') {
-    banner.style.display = 'none';
+    icon.textContent = '✅';
+    text.textContent = 'Notificações ativadas — alertas às 07:35h nos dias úteis.';
+    text.style.color = '#22c55e';
+    btn.style.display = 'none';
+    // Silently refresh token
     registerFcmToken();
   } else if (Notification.permission === 'denied') {
-    banner.style.display = 'none';
+    icon.textContent = '🔕';
+    text.textContent = 'Notificações bloqueadas. Ative nas configurações do navegador.';
+    text.style.color = '#ef4444';
+    btn.style.display = 'none';
   } else {
-    banner.style.display = 'flex';
+    // Permission not decided — show activation button
+    icon.textContent = '🔔';
+    text.textContent = 'Receba alertas de inspeções pendentes.';
+    text.style.color = 'var(--text-secondary)';
+    btn.style.display = 'inline-flex';
   }
 }
 
 /**
- * Called when technician clicks "Ativar NotificaÃ§Ãµes".
+ * Called when technician clicks "Ativar Notificações".
  * Requests browser permission and saves FCM token to Firestore.
  */
 async function requestNotificationPermission() {
   if (!messaging) {
-    alert('NotificaÃ§Ãµes Push nÃ£o sÃ£o suportadas neste navegador.');
+    alert('Notificações Push não são suportadas neste navegador.');
     return;
   }
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
       await registerFcmToken();
-      const banner = document.getElementById('notification-banner');
-      if (banner) banner.style.display = 'none';
-      alert('âœ… NotificaÃ§Ãµes ativadas! VocÃª receberÃ¡ alertas de inspeÃ§Ãµes pendentes todo dia Ãºtil Ã s 07:35h.');
+      checkNotificationBanner(); // Refresh status display
+      alert('✅ Notificações ativadas! Você receberá alertas de inspeções pendentes todo dia útil às 07:35h.');
     } else {
-      alert('PermissÃ£o de notificaÃ§Ã£o negada. VocÃª pode ativar novamente nas configuraÃ§Ãµes do seu navegador.');
+      checkNotificationBanner(); // Refresh status display
+      alert('Permissão de notificação negada. Você pode ativar novamente nas configurações do seu navegador.');
     }
   } catch (err) {
-    console.error('Erro ao solicitar permissÃ£o de notificaÃ§Ã£o:', err);
-    alert('Erro ao solicitar permissÃ£o: ' + err.message);
+    console.error('Erro ao solicitar permissão de notificação:', err);
+    alert('Erro ao solicitar permissão: ' + err.message);
   }
 }
 
