@@ -14,15 +14,35 @@ admin.initializeApp({
 const db = admin.firestore();
 const messaging = admin.messaging();
 
-const APP_SECRET_KEY = 'sulcorte_inspec_2026';
-
 async function main() {
   const hoje = new Date();
   const hojeUTC3 = new Date(hoje.getTime() - 3 * 60 * 60 * 1000);
   const diaSemana = hojeUTC3.getDay();
   const hojeStr = hojeUTC3.toISOString().split('T')[0];
 
-  console.log(`▶️  Executando verificação para ${hojeStr} (dia da semana: ${diaSemana})`);
+  console.log(`▶️  Executando verificação para a data: ${hojeStr} (dia da semana: ${diaSemana})`);
+
+  // 1. Buscar todos os usuários
+  const usersSnap = await db.collection('users').get();
+  console.log(`👥 Total de usuários no Firestore: ${usersSnap.size}`);
+
+  const tecnicosComToken = [];
+  usersSnap.forEach(doc => {
+    const data = doc.data();
+    console.log(`  👤 Usuário '${doc.id}': fcmToken=${data.fcmToken ? 'PRESENTE (' + data.fcmToken.substring(0, 15) + '...)' : 'AUSENTE'}`);
+    if (data.fcmToken) {
+      tecnicosComToken.push({ username: doc.id, ...data });
+    }
+  });
+
+  if (tecnicosComToken.length === 0) {
+    console.log('⚠️ Nenhum técnico com FCM Token cadastrado no banco.');
+    return;
+  }
+
+  // 2. Buscar atividades
+  const activitiesSnap = await db.collection('activities').get();
+  console.log(`📋 Total de atividades no Firestore: ${activitiesSnap.size}`);
 
   const datasParaVerificar = [hojeStr];
   if (diaSemana === 1) {
@@ -32,82 +52,55 @@ async function main() {
     domingo.setDate(hojeUTC3.getDate() - 1);
     datasParaVerificar.push(sabado.toISOString().split('T')[0]);
     datasParaVerificar.push(domingo.toISOString().split('T')[0]);
-    console.log(`📅 Segunda-feira: verificando também ${datasParaVerificar.slice(1).join(' e ')}`);
-  }
-
-  const activitiesSnap = await db
-    .collection('activities')
-    .where('appSecretKey', '==', APP_SECRET_KEY)
-    .get();
-
-  if (activitiesSnap.empty) {
-    console.log('ℹ️  Nenhuma atividade encontrada no banco.');
-    return;
   }
 
   const pendentes = activitiesSnap.docs
-    .map(d => d.data())
+    .map(d => ({ id: d.id, ...d.data() }))
     .filter(a => a.nextDueDate && datasParaVerificar.some(d => a.nextDueDate <= d));
 
-  console.log(`📋 Atividades pendentes encontradas: ${pendentes.length}`);
-
-  if (pendentes.length === 0) {
-    console.log('✅ Nenhuma atividade pendente. Nenhuma notificação enviada.');
-    return;
-  }
+  console.log(`📌 Atividades pendentes identificadas: ${pendentes.length}`);
 
   const porTecnico = {};
   for (const atividade of pendentes) {
     const tecnicos = atividade.assignedTo || [];
     for (const tecnico of tecnicos) {
       if (!porTecnico[tecnico]) porTecnico[tecnico] = [];
-      porTecnico[tecnico].push(atividade.title);
+      porTecnico[tecnico].push(atividade.title || 'Inspeção');
     }
   }
 
-  const usersSnap = await db
-    .collection('users')
-    .where('appSecretKey', '==', APP_SECRET_KEY)
-    .where('role', '==', 'tecnico')
-    .get();
-
+  // 3. Enviar notificação para cada técnico cadastrado
   let totalEnviados = 0;
-  const erros = [];
-
-  for (const userDoc of usersSnap.docs) {
-    const user = userDoc.data();
-
-    if (!user.fcmToken) {
-      console.log(`⏭️  ${user.username}: sem FCM Token cadastrado (notificações não ativadas).`);
-      continue;
-    }
-    if (!porTecnico[user.username]) {
-      console.log(`✅ ${user.username}: sem pendências para hoje.`);
-      continue;
-    }
-
-    const atividades = porTecnico[user.username];
+  for (const tecnico of tecnicosComToken) {
+    const atividades = porTecnico[tecnico.username] || [];
     const quantidade = atividades.length;
-    const listaStr = atividades.slice(0, 3).join(', ') +
-      (quantidade > 3 ? ` e mais ${quantidade - 3} atividade(s)...` : '');
 
-    const titulo = `⚠️ Inspeção Pendente (${quantidade} ${quantidade === 1 ? 'atividade' : 'atividades'})`;
+    let titulo = `⚠️ Inspeção Pendente (${quantidade} ${quantidade === 1 ? 'atividade' : 'atividades'})`;
+    let texto = atividades.slice(0, 3).join(', ') + (quantidade > 3 ? ` e mais ${quantidade - 3}...` : '');
+
+    // Se não houver atividades vencidas especificamente hoje, envia notificação de confirmação
+    if (quantidade === 0) {
+      titulo = `🔔 Rota de Inspeção: Sistema Ativo`;
+      texto = `Você está registrado para receber alertas de inspeção diários às 07:35h.`;
+    }
+
+    console.log(`🚀 Enviando Push para '${tecnico.username}' -> "${titulo}"`);
 
     const mensagem = {
-      token: user.fcmToken,
+      token: tecnico.fcmToken,
       notification: {
         title: titulo,
-        body: listaStr,
+        body: texto,
       },
       data: {
         title: titulo,
-        body: listaStr,
+        body: texto,
         url: 'https://crsbabo.github.io/rota-de-inspecao/'
       },
       webpush: {
         notification: {
           title: titulo,
-          body: listaStr,
+          body: texto,
           icon: 'https://crsbabo.github.io/rota-de-inspecao/icon.svg',
           badge: 'https://crsbabo.github.io/rota-de-inspecao/icon.svg',
           requireInteraction: true,
@@ -121,17 +114,15 @@ async function main() {
     };
 
     try {
-      await messaging.send(mensagem);
-      console.log(`📱 Notificação enviada para ${user.name || user.username}: "${listaStr}"`);
+      const response = await messaging.send(mensagem);
+      console.log(`✅ FCM aceito! ID da mensagem: ${response}`);
       totalEnviados++;
     } catch (err) {
-      console.error(`❌ Erro ao enviar para ${user.username}:`, err.message);
-      erros.push(user.username);
-
+      console.error(`❌ Erro FCM ao enviar para ${tecnico.username}:`, err.message);
       if (err.code === 'messaging/registration-token-not-registered' ||
           err.code === 'messaging/invalid-registration-token') {
-        await db.collection('users').doc(user.username).update({ fcmToken: null });
-        console.log(`🗑️  Token inválido removido para ${user.username}.`);
+        await db.collection('users').doc(tecnico.username).update({ fcmToken: null });
+        console.log(`🗑️ Token inválido removido para ${tecnico.username}.`);
       }
     }
   }
