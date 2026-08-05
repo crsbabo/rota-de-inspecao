@@ -19,16 +19,20 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano:', payload);
 
-  const title = (payload.notification && payload.notification.title) || (payload.data && payload.data.title) || 'Rota de Inspeção';
-  const options = {
-    body: (payload.notification && payload.notification.body) || (payload.data && payload.data.body) || 'Você possui inspeções de manutenção pendentes.',
-    icon: './icon.svg',
-    badge: './icon.svg',
-    tag: 'inspecao-push-notification',
-    data: payload.data || {}
-  };
+  // Se o payload já possui objeto 'notification', o próprio Chrome/FCM exibe a notificação automaticamente.
+  // Só chamamos showNotification manualmente se for uma mensagem do tipo 'data' sem objeto 'notification'.
+  if (!payload.notification) {
+    const title = (payload.data && payload.data.title) || '⚠️ Inspeção Pendente';
+    const options = {
+      body: (payload.data && payload.data.body) || 'Você possui inspeções de manutenção pendentes.',
+      icon: './icon.svg',
+      badge: './icon.svg',
+      tag: 'inspecao-diaria',
+      data: payload.data || {}
+    };
 
-  self.registration.showNotification(title, options);
+    self.registration.showNotification(title, options);
+  }
 });
 
 // Click notification to focus/open the PWA app window
