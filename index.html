@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Aplicativo de Rotas de InspeÃ§Ã£o de ManutenÃ§Ã£o Preventiva">
+  <meta name="description" content="Aplicativo de Rotas de Inspeção de Manutenção Preventiva">
   <meta name="theme-color" content="#2563eb">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Rota de InspeÃ§Ã£o - ManutenÃ§Ã£o Preventiva</title>
+  <title>Rota de Inspeção - Manutenção Preventiva</title>
   
   <!-- Manifest -->
   <link rel="manifest" href="manifest.json">
@@ -29,8 +29,8 @@
   <!-- Dynamic Header -->
   <header id="app-header" style="display: none;">
     <div class="logo-container">
-      <img src="icon.svg" alt="Logo Rota de InspeÃ§Ã£o">
-      <h1>Rota de InspeÃ§Ã£o</h1>
+      <img src="icon.svg" alt="Logo Rota de Inspeção">
+      <h1>Rota de Inspeção</h1>
     </div>
     <div class="header-actions">
       <div id="db-status"></div>
@@ -50,12 +50,12 @@
         <div class="login-card">
           <div class="login-header">
             <h2>Bem-vindo</h2>
-            <p>FaÃ§a login para gerenciar ou executar as rotas de inspeÃ§Ã£o.</p>
+            <p>Faça login para gerenciar ou executar as rotas de inspeção.</p>
           </div>
           <form id="login-form">
             <div class="form-group">
-              <label for="login-username">UsuÃ¡rio</label>
-              <input type="text" id="login-username" class="input-control" placeholder="Digite seu usuÃ¡rio" required autocomplete="username">
+              <label for="login-username">Usuário</label>
+              <input type="text" id="login-username" class="input-control" placeholder="Digite seu usuário" required autocomplete="username">
             </div>
             <div class="form-group">
               <label for="login-password">Senha</label>
@@ -73,9 +73,9 @@
       <div class="admin-grid">
         <!-- Sidebar Navigation -->
         <aside class="admin-sidebar">
-          <button class="sidebar-btn active" onclick="showPage('admin-activities')">ðŸ“‹ Atividades</button>
-          <button class="sidebar-btn" onclick="showPage('admin-users'); loadAdminUsers();">ðŸ‘¥ TÃ©cnicos</button>
-          <button class="sidebar-btn" onclick="showPage('admin-history'); loadAdminHistory();">ðŸ“œ HistÃ³rico</button>
+          <button class="sidebar-btn active" onclick="showPage('admin-activities')">📋 Atividades</button>
+          <button class="sidebar-btn" onclick="showPage('admin-users'); loadAdminUsers();">👥 Técnicos</button>
+          <button class="sidebar-btn" onclick="showPage('admin-history'); loadAdminHistory();">📜 Histórico</button>
         </aside>
 
         <!-- Dynamic Admin Content Pane -->
@@ -84,7 +84,7 @@
           <!-- Admin View: Activities -->
           <div id="admin-activities" class="admin-sub-page active">
             <div class="section-header">
-              <h2>Atividades de InspeÃ§Ã£o</h2>
+              <h2>Atividades de Inspeção</h2>
               <button class="btn btn-primary" onclick="openActivityModal()">+ Nova Atividade</button>
             </div>
             <div id="activities-cards-grid" class="grid-cards">
@@ -95,8 +95,8 @@
           <!-- Admin View: Users (Technicians) -->
           <div id="admin-users" class="admin-sub-page">
             <div class="section-header">
-              <h2>Gerenciar TÃ©cnicos</h2>
-              <button class="btn btn-primary" onclick="openUserModal()">+ Novo TÃ©cnico</button>
+              <h2>Gerenciar Técnicos</h2>
+              <button class="btn btn-primary" onclick="openUserModal()">+ Novo Técnico</button>
             </div>
             <div id="users-cards-grid" class="grid-cards">
               <!-- Dynamically populated -->
@@ -106,7 +106,7 @@
           <!-- Admin View: History Logs -->
           <div id="admin-history" class="admin-sub-page">
             <div class="section-header">
-              <h2>HistÃ³rico de InspeÃ§Ãµes Realizadas</h2>
+              <h2>Histórico de Inspeções Realizadas</h2>
             </div>
             <div class="table-responsive">
               <table>
@@ -114,8 +114,8 @@
                   <tr>
                     <th>Data/Hora</th>
                     <th>Atividade</th>
-                    <th>TÃ©cnico</th>
-                    <th>ComentÃ¡rio do TÃ©cnico</th>
+                    <th>Técnico</th>
+                    <th>Comentário do Técnico</th>
                   </tr>
                 </thead>
                 <tbody id="history-table-body">
@@ -136,22 +136,22 @@
         <div id="notification-section" class="card" style="margin-bottom: 1.25rem; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); padding: 0.85rem 1.25rem;">
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
             <div style="display: flex; align-items: center; gap: 0.6rem;">
-              <span id="notif-status-icon" style="font-size: 1.3rem;">ðŸ””</span>
-              <span id="notif-status-text" style="font-size: 0.9rem; color: var(--text-secondary);">Verificando notificaÃ§Ãµes...</span>
+              <span id="notif-status-icon" style="font-size: 1.3rem;">🔔</span>
+              <span id="notif-status-text" style="font-size: 0.9rem; color: var(--text-secondary);">Verificando notificações...</span>
             </div>
-            <button id="btn-enable-notifications" class="btn btn-primary btn-sm" onclick="requestNotificationPermission()" style="display: none;">Ativar NotificaÃ§Ãµes</button>
+            <button id="btn-enable-notifications" class="btn btn-primary btn-sm" onclick="requestNotificationPermission()" style="display: none;">Ativar Notificações</button>
           </div>
         </div>
 
         <!-- Filters Area -->
         <div class="filter-bar">
           <div class="form-group" style="margin-bottom: 0;">
-            <label for="filter-period">PerÃ­odo de InspeÃ§Ã£o</label>
+            <label for="filter-period">Período de Inspeção</label>
             <select id="filter-period" class="input-control select-control" onchange="applyTechFilters()">
               <option value="all">Ver Todas Pendentes</option>
               <option value="today">Vencendo Hoje</option>
-              <option value="week">Vencendo nos prÃ³ximos 7 dias</option>
-              <option value="month">Vencendo nos prÃ³ximos 30 dias</option>
+              <option value="week">Vencendo nos próximos 7 dias</option>
+              <option value="month">Vencendo nos próximos 30 dias</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0;">
@@ -165,7 +165,7 @@
 
         <!-- Grid of Assigned Activities -->
         <div class="section-header" style="margin-bottom: 0;">
-          <h2>Minhas Atividades de InspeÃ§Ã£o</h2>
+          <h2>Minhas Atividades de Inspeção</h2>
         </div>
         <div id="tech-activities-grid" class="grid-cards">
           <!-- Dynamically populated -->
@@ -181,47 +181,47 @@
           <button class="btn btn-secondary btn-sm" onclick="showPage('tech-home'); loadTechnicianActivities();">Voltar</button>
         </div>
 
-        <h3>InstruÃ§Ãµes de ExecuÃ§Ã£o:</h3>
+        <h3>Instruções de Execução:</h3>
         <div id="exec-instruction" class="instruction-box">
           <!-- Dynamically populated -->
         </div>
 
         <div class="form-group">
-          <label for="exec-comment">ComentÃ¡rio / ObservaÃ§Ã£o da InspeÃ§Ã£o</label>
-          <textarea id="exec-comment" class="input-control" rows="3" placeholder="Insira alguma observaÃ§Ã£o sobre as condiÃ§Ãµes do equipamento (opcional)"></textarea>
+          <label for="exec-comment">Comentário / Observação da Inspeção</label>
+          <textarea id="exec-comment" class="input-control" rows="3" placeholder="Insira alguma observação sobre as condições do equipamento (opcional)"></textarea>
         </div>
 
         <!-- QR Scanner Interface -->
         <div class="qr-scanner-section">
-          <h4>ValidaÃ§Ã£o de QR Code no Local</h4>
+          <h4>Validação de QR Code no Local</h4>
           <p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">
-            Para concluir a atividade, aponte a cÃ¢mera para o QR Code correspondente ou digite o cÃ³digo manual.
+            Para concluir a atividade, aponte a câmera para o QR Code correspondente ou digite o código manual.
           </p>
           <div style="font-size: 0.85rem; margin-bottom: 0.5rem;">
-            CÃ³digo esperado: <strong id="exec-qrcode-expected" class="badge badge-info"></strong>
+            Código esperado: <strong id="exec-qrcode-expected" class="badge badge-info"></strong>
           </div>
 
           <!-- Camera Screen Placeholder -->
           <div id="qr-scanner-visual" class="qr-placeholder">
             <div class="scanner-laser"></div>
             <div id="qr-reader" style="width: 100%;"></div>
-            <span style="position: absolute; pointer-events: none;">Aguardando ativaÃ§Ã£o da cÃ¢mera...</span>
+            <span style="position: absolute; pointer-events: none;">Aguardando ativação da câmera...</span>
           </div>
 
           <!-- Scan feedback -->
           <div id="scanner-feedback" class="badge" style="display: none; padding: 0.5rem 1rem; width: 100%; text-align: center;"></div>
 
           <div style="display: flex; gap: 0.75rem; width: 100%; margin-top: 0.5rem; justify-content: center;">
-            <button id="btn-start-scanner" class="btn btn-primary" onclick="startScanner()">Ativar CÃ¢mera</button>
-            <button id="btn-show-manual" class="btn btn-secondary" onclick="showManualEntry()">Digitar CÃ³digo</button>
+            <button id="btn-start-scanner" class="btn btn-primary" onclick="startScanner()">Ativar Câmera</button>
+            <button id="btn-show-manual" class="btn btn-secondary" onclick="showManualEntry()">Digitar Código</button>
           </div>
 
           <!-- Manual Code Entry Form -->
           <div id="manual-entry-container" style="display: none; width: 100%; margin-top: 1rem;">
             <div class="form-group">
-              <label for="exec-manual-code">CÃ³digo do QR Code</label>
+              <label for="exec-manual-code">Código do QR Code</label>
               <div style="display: flex; gap: 0.5rem;">
-                <input type="text" id="exec-manual-code" class="input-control" placeholder="Digite o cÃ³digo gravado no local">
+                <input type="text" id="exec-manual-code" class="input-control" placeholder="Digite o código gravado no local">
                 <button class="btn btn-success" onclick="handleManualSubmit()">Validar</button>
               </div>
             </div>
@@ -236,27 +236,27 @@
   <div id="user-modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 id="user-modal-title">Novo TÃ©cnico</h3>
+        <h3 id="user-modal-title">Novo Técnico</h3>
         <button class="close-btn" onclick="closeUserModal()">&times;</button>
       </div>
       <form id="user-form">
         <div class="modal-body">
           <div class="form-group">
-            <label for="user-username">UsuÃ¡rio (login)</label>
+            <label for="user-username">Usuário (login)</label>
             <input type="text" id="user-username" class="input-control" placeholder="Ex: joao" required>
           </div>
           <div class="form-group">
             <label for="user-name">Nome Completo</label>
-            <input type="text" id="user-name" class="input-control" placeholder="Ex: JoÃ£o Silva" required>
+            <input type="text" id="user-name" class="input-control" placeholder="Ex: João Silva" required>
           </div>
           <div class="form-group">
             <label for="user-password">Senha</label>
-            <input type="text" id="user-password" class="input-control" placeholder="Digite a senha provisÃ³ria" required>
+            <input type="text" id="user-password" class="input-control" placeholder="Digite a senha provisória" required>
           </div>
           <div class="form-group">
-            <label for="user-role">FunÃ§Ã£o / NÃ­vel de Acesso</label>
+            <label for="user-role">Função / Nível de Acesso</label>
             <select id="user-role" class="input-control select-control">
-              <option value="tecnico">TÃ©cnico (Acesso operacional)</option>
+              <option value="tecnico">Técnico (Acesso operacional)</option>
               <option value="admin">Administrador (Acesso total)</option>
             </select>
           </div>
@@ -280,23 +280,23 @@
         <input type="hidden" id="activity-id">
         <div class="modal-body">
           <div class="form-group">
-            <label for="activity-title">TÃ­tulo da Atividade</label>
-            <input type="text" id="activity-title" class="input-control" placeholder="Ex: InspeÃ§Ã£o do Torno CNC" required>
+            <label for="activity-title">Título da Atividade</label>
+            <input type="text" id="activity-title" class="input-control" placeholder="Ex: Inspeção do Torno CNC" required>
           </div>
           <div class="form-group">
-            <label for="activity-description">InstruÃ§Ãµes Detalhadas (Passo a Passo)</label>
-            <textarea id="activity-description" class="input-control" rows="4" placeholder="Descreva os itens de checagem da manutenÃ§Ã£o preventiva..." required></textarea>
+            <label for="activity-description">Instruções Detalhadas (Passo a Passo)</label>
+            <textarea id="activity-description" class="input-control" rows="4" placeholder="Descreva os itens de checagem da manutenção preventiva..." required></textarea>
           </div>
           <div class="form-group">
             <label for="activity-periodicity">Periodicidade (Repetir a cada X dias)</label>
             <input type="number" id="activity-periodicity" class="input-control" placeholder="Ex: 7" min="1" required>
           </div>
           <div class="form-group">
-            <label for="activity-qrcode">CÃ³digo Identificador do QR Code</label>
-            <input type="text" id="activity-qrcode" class="input-control" placeholder="CÃ³digo colado na mÃ¡quina (ex: CNC-01)" required>
+            <label for="activity-qrcode">Código Identificador do QR Code</label>
+            <input type="text" id="activity-qrcode" class="input-control" placeholder="Código colado na máquina (ex: CNC-01)" required>
           </div>
           <div class="form-group">
-            <label>Atribuir aos TÃ©cnicos:</label>
+            <label>Atribuir aos Técnicos:</label>
             <div id="activity-tech-checkboxes" class="checkbox-list">
               <!-- Populated dynamically -->
             </div>
