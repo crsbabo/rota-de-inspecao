@@ -90,6 +90,23 @@ function loadFirebaseConfig() {
     try {
       messaging = firebase.messaging();
       console.log('Firebase Messaging inicializado.');
+
+      // Escutar mensagens quando o aplicativo estiver aberto em primeiro plano
+      messaging.onMessage((payload) => {
+        console.log('Mensagem Push recebida em 1º plano:', payload);
+        const title = payload.notification?.title || payload.data?.title || '⚠️ Inspeção Pendente';
+        const body = payload.notification?.body || payload.data?.body || 'Você possui inspeções de manutenção pendentes.';
+
+        if (Notification.permission === 'granted') {
+          try {
+            new Notification(title, { body: body, icon: './icon.svg' });
+          } catch (e) {
+            console.warn('Erro ao criar Notification em 1º plano:', e);
+          }
+        }
+
+        alert(`🔔 NOTIFICAÇÃO PUSH RECEBIDA:\n\n${title}\n${body}`);
+      });
     } catch (msgErr) {
       console.warn('Firebase Messaging não disponível neste navegador:', msgErr.message);
       messaging = null;
