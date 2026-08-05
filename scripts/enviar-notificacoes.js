@@ -4,7 +4,7 @@
 
 const admin = require('firebase-admin');
 
-// Carrega credenciais do Secret do GitHub (variável de ambiente segura)
+// Carrega credenciais do Secret do GitHub
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
@@ -18,14 +18,12 @@ const APP_SECRET_KEY = 'sulcorte_inspec_2026';
 
 async function main() {
   const hoje = new Date();
-  // Ajusta para horário de Brasília (UTC-3)
   const hojeUTC3 = new Date(hoje.getTime() - 3 * 60 * 60 * 1000);
-  const diaSemana = hojeUTC3.getDay(); // 0=Dom, 1=Seg, ..., 6=Sáb
+  const diaSemana = hojeUTC3.getDay();
   const hojeStr = hojeUTC3.toISOString().split('T')[0];
 
   console.log(`▶️  Executando verificação para ${hojeStr} (dia da semana: ${diaSemana})`);
 
-  // Se hoje for Segunda-feira, inclui Sábado e Domingo anteriores
   const datasParaVerificar = [hojeStr];
   if (diaSemana === 1) {
     const sabado = new Date(hojeUTC3);
@@ -37,7 +35,6 @@ async function main() {
     console.log(`📅 Segunda-feira: verificando também ${datasParaVerificar.slice(1).join(' e ')}`);
   }
 
-  // Buscar todas as atividades do Firestore
   const activitiesSnap = await db
     .collection('activities')
     .where('appSecretKey', '==', APP_SECRET_KEY)
@@ -48,7 +45,6 @@ async function main() {
     return;
   }
 
-  // Filtrar atividades pendentes (vencidas ou que vencem nas datas verificadas)
   const pendentes = activitiesSnap.docs
     .map(d => d.data())
     .filter(a => a.nextDueDate && datasParaVerificar.some(d => a.nextDueDate <= d));
@@ -60,7 +56,6 @@ async function main() {
     return;
   }
 
-  // Agrupar atividades por técnico responsável
   const porTecnico = {};
   for (const atividade of pendentes) {
     const tecnicos = atividade.assignedTo || [];
@@ -70,7 +65,6 @@ async function main() {
     }
   }
 
-  // Buscar técnicos com FCM Token registrado
   const usersSnap = await db
     .collection('users')
     .where('appSecretKey', '==', APP_SECRET_KEY)
@@ -105,8 +99,15 @@ async function main() {
         title: titulo,
         body: listaStr,
       },
+      data: {
+        title: titulo,
+        body: listaStr,
+        url: 'https://crsbabo.github.io/rota-de-inspecao/'
+      },
       webpush: {
         notification: {
+          title: titulo,
+          body: listaStr,
           icon: 'https://crsbabo.github.io/rota-de-inspecao/icon.svg',
           badge: 'https://crsbabo.github.io/rota-de-inspecao/icon.svg',
           requireInteraction: true,
@@ -127,7 +128,6 @@ async function main() {
       console.error(`❌ Erro ao enviar para ${user.username}:`, err.message);
       erros.push(user.username);
 
-      // Se o token expirou/inválido, remove do Firestore para evitar erros futuros
       if (err.code === 'messaging/registration-token-not-registered' ||
           err.code === 'messaging/invalid-registration-token') {
         await db.collection('users').doc(user.username).update({ fcmToken: null });
@@ -136,7 +136,7 @@ async function main() {
     }
   }
 
-  console.log(`\n🏁 Concluído: ${totalEnviados} notificação(ões) enviada(s). Erros: ${erros.length > 0 ? erros.join(', ') : 'nenhum'}.`);
+  console.log(`\n🏁 Concluído: ${totalEnviados} notificação(ões) enviada(s).`);
 }
 
 main().catch(err => {
