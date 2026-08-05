@@ -996,20 +996,32 @@ async function requestNotificationPermission() {
 async function registerFcmToken() {
   if (!messaging || !useFirebase || !currentUser) return;
   try {
-    const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY });
+    let swReg = null;
+    if ('serviceWorker' in navigator) {
+      swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    }
+
+    const tokenOptions = { vapidKey: FCM_VAPID_KEY };
+    if (swReg) {
+      tokenOptions.serviceWorkerRegistration = swReg;
+    }
+
+    const token = await messaging.getToken(tokenOptions);
     if (token) {
       console.log('FCM Token registrado:', token);
-      await db.collection('users').doc(currentUser.username).update({
+      await db.collection('users').doc(currentUser.username).set({
         fcmToken: token,
         fcmTokenUpdatedAt: new Date().toISOString(),
         appSecretKey: APP_SECRET_KEY
-      });
+      }, { merge: true });
       console.log('FCM Token salvo no Firestore com sucesso.');
     } else {
       console.warn('Nenhum FCM Token obtido. Verifique o Service Worker e a VAPID Key.');
+      alert('⚠️ O navegador concedeu a permissão, mas o token de notificação não pôde ser gerado.');
     }
   } catch (err) {
     console.error('Erro ao obter/salvar FCM Token:', err);
+    alert('⚠️ Erro ao registrar notificações: ' + err.message);
   }
 }
 
