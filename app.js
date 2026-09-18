@@ -11,6 +11,7 @@ let currentExecutingActivity = null;
 // Firebase configuration state
 let db = null;
 let useFirebase = false;
+let appServiceWorkerRegistrationPromise = null;
 
 // =====================================================
 // FIREBASE CONFIG — conectado automaticamente em
@@ -49,6 +50,7 @@ const DEFAULT_ACTIVITIES = [
     qrCode: 'COMP-01',
     assignedTo: ['cristiano'], // usernames dos técnicos
     lastExecuted: null,
+    firstDueDate: getFutureDate(0),
     nextDueDate: getFutureDate(0) // Disponível hoje
   },
   { 
@@ -59,6 +61,7 @@ const DEFAULT_ACTIVITIES = [
     qrCode: 'TORNO-02',
     assignedTo: ['cristiano'],
     lastExecuted: null,
+    firstDueDate: getFutureDate(1),
     nextDueDate: getFutureDate(1) // Disponível amanhã
   }
 ];
@@ -68,7 +71,36 @@ function getFutureDate(daysOffset) {
   const d = new Date();
   d.setDate(d.getDate() + daysOffset);
   d.setHours(0,0,0,0);
-  return d.toISOString().split('T')[0];
+  return formatDateKey(d);
+}
+
+// Date-only values are business dates, not UTC timestamps. Constructing
+// `new Date('YYYY-MM-DD')` interprets the value as UTC and shifts it to the
+// previous day in Brazil, which made activities due today appear overdue.
+function parseDateOnlyLocal(dateStr) {
+  if (!dateStr) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+  if (!match) return null;
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function formatDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function isDateOverdue(dateStr, referenceDate = new Date()) {
+  const dueDate = parseDateOnlyLocal(dateStr);
+  if (!dueDate) return false;
+
+  const today = new Date(referenceDate);
+  today.setHours(0, 0, 0, 0);
+  return dueDate < today;
 }
 
 // ----------------------------------------------------
@@ -373,6 +405,7 @@ async function handleLogin(e) {
     
     if (user.role === 'admin') {
       loadAdminUsers();
+      loadAdminActivities();
       showPage('admin-activities');
     } else {
       loadTechnicianActivities();
@@ -486,18 +519,42 @@ async function deleteUser(username) {
     return;
   }
   if (confirm(`Tem certeza que deseja excluir o usuário @${username}?`)) {
-    usersList = usersList.filter(u => u.username !== username);
-    await saveUsers();
-    
-    // Clean up activity assignments for this deleted user
-    activitiesList.forEach(act => {
-      if (act.assignedTo) {
-        act.assignedTo = act.assignedTo.filter(u => u !== username);
+    const nextUsers = usersList.filter(u => u.username !== username);
+    const nextActivities = activitiesList.map(act => ({
+      ...act,
+      assignedTo: (act.assignedTo || []).filter(u => u !== username)
+    }));
+
+    try {
+      if (useFirebase) {
+        // Delete the user and clean assignments atomically so a partial
+        // failure cannot leave a removed user assigned to an activity.
+        const batch = db.batch();
+        batch.delete(db.collection('users').doc(username));
+
+        nextActivities.forEach((act, index) => {
+          const previousAssignments = activitiesList[index].assignedTo || [];
+          if (previousAssignments.includes(username)) {
+            batch.set(
+              db.collection('activities').doc(act.id),
+              { ...act, appSecretKey: APP_SECRET_KEY }
+            );
+          }
+        });
+
+        await batch.commit();
+      } else {
+        localStorage.setItem('inspec_users', JSON.stringify(nextUsers));
+        localStorage.setItem('inspec_activities', JSON.stringify(nextActivities));
       }
-    });
-    await saveActivities();
-    
-    loadAdminUsers();
+
+      usersList = nextUsers;
+      activitiesList = nextActivities;
+      loadAdminUsers();
+    } catch (e) {
+      console.error('Erro ao excluir usuário:', e);
+      alert('Erro ao excluir usuário:\n' + e.message);
+    }
   }
 }
 
@@ -546,6 +603,8 @@ function openActivityModal(id = '') {
   const modal = document.getElementById('activity-modal');
   const title = document.getElementById('activity-modal-title');
   const techContainer = document.getElementById('activity-tech-checkboxes');
+  const firstDateInput = document.getElementById('activity-first-date');
+  const firstDateHelp = document.getElementById('activity-first-date-help');
   
   // Render technicians checklist
   techContainer.innerHTML = '';
@@ -563,6 +622,10 @@ function openActivityModal(id = '') {
   document.getElementById('activity-title').value = '';
   document.getElementById('activity-description').value = '';
   document.getElementById('activity-periodicity').value = '';
+  firstDateInput.value = getFutureDate(0);
+  firstDateInput.disabled = false;
+  firstDateInput.required = true;
+  firstDateHelp.innerText = 'Após a primeira execução, as próximas datas serão calculadas pela periodicidade.';
   document.getElementById('activity-qrcode').value = '';
 
   if (id) {
@@ -574,6 +637,17 @@ function openActivityModal(id = '') {
       document.getElementById('activity-description').value = act.description;
       document.getElementById('activity-periodicity').value = act.periodicity;
       document.getElementById('activity-qrcode').value = act.qrCode;
+
+      if (act.lastExecuted) {
+        // The recurrence cycle has already started, so its next date must keep
+        // following the last execution instead of being reset by this form.
+        firstDateInput.value = act.firstDueDate || '';
+        firstDateInput.disabled = true;
+        firstDateInput.required = false;
+        firstDateHelp.innerText = 'O ciclo já foi iniciado. A próxima inspeção continua sendo calculada a partir da última execução.';
+      } else {
+        firstDateInput.value = act.firstDueDate || act.nextDueDate || getFutureDate(0);
+      }
 
       // Select assigned techs
       const checkboxes = document.querySelectorAll('input[name="assignedTechs"]');
@@ -600,6 +674,7 @@ async function saveActivityForm(e) {
   const title = document.getElementById('activity-title').value.trim();
   const description = document.getElementById('activity-description').value.trim();
   const periodicity = parseInt(document.getElementById('activity-periodicity').value);
+  const firstDueDate = document.getElementById('activity-first-date').value;
   const qrCode = document.getElementById('activity-qrcode').value.trim();
 
   // Get selected techs
@@ -608,8 +683,16 @@ async function saveActivityForm(e) {
     assignedTo.push(cb.value);
   });
 
-  if (!title || !periodicity || !qrCode) {
-    alert("Por favor, preencha os campos obrigatórios (Título, Periodicidade e Código QR).");
+  const existingActivity = id ? activitiesList.find(a => a.id === id) : null;
+  const cycleAlreadyStarted = Boolean(existingActivity && existingActivity.lastExecuted);
+
+  if (!title || !periodicity || !qrCode || (!cycleAlreadyStarted && !firstDueDate)) {
+    alert("Por favor, preencha os campos obrigatórios (Título, Periodicidade, Primeira Inspeção e Código QR).");
+    return;
+  }
+
+  if (firstDueDate && !parseDateOnlyLocal(firstDueDate)) {
+    alert('Informe uma data válida para a primeira inspeção.');
     return;
   }
 
@@ -622,9 +705,11 @@ async function saveActivityForm(e) {
       activitiesList[idx].periodicity = periodicity;
       activitiesList[idx].qrCode = qrCode;
       activitiesList[idx].assignedTo = assignedTo;
-      // recalculate next due date if never executed
+      // Before the first execution, the admin can reschedule the starting
+      // date. Once executed, recurrence remains anchored to lastExecuted.
       if (!activitiesList[idx].lastExecuted) {
-        activitiesList[idx].nextDueDate = getFutureDate(0);
+        activitiesList[idx].firstDueDate = firstDueDate;
+        activitiesList[idx].nextDueDate = firstDueDate;
       }
     }
   } else {
@@ -638,7 +723,8 @@ async function saveActivityForm(e) {
       qrCode,
       assignedTo,
       lastExecuted: null,
-      nextDueDate: getFutureDate(0) // Available today
+      firstDueDate,
+      nextDueDate: firstDueDate
     });
   }
 
@@ -649,9 +735,21 @@ async function saveActivityForm(e) {
 
 async function deleteActivity(id) {
   if (confirm("Tem certeza que deseja excluir esta atividade de inspeção?")) {
-    activitiesList = activitiesList.filter(a => a.id !== id);
-    await saveActivities();
-    loadAdminActivities();
+    const nextActivities = activitiesList.filter(a => a.id !== id);
+
+    try {
+      if (useFirebase) {
+        await db.collection('activities').doc(id).delete();
+      } else {
+        localStorage.setItem('inspec_activities', JSON.stringify(nextActivities));
+      }
+
+      activitiesList = nextActivities;
+      loadAdminActivities();
+    } catch (e) {
+      console.error('Erro ao excluir atividade:', e);
+      alert('Erro ao excluir atividade:\n' + e.message);
+    }
   }
 }
 
@@ -697,13 +795,11 @@ function loadTechnicianActivities() {
 
   if (dateFilter) {
     // Filter for a specific date (is next due date on or before selected date?)
-    const targetDate = new Date(dateFilter);
-    targetDate.setHours(0,0,0,0);
+    const targetDate = parseDateOnlyLocal(dateFilter);
     myActivities = myActivities.filter(act => {
       if (!act.nextDueDate) return true;
-      const due = new Date(act.nextDueDate);
-      due.setHours(0,0,0,0);
-      return due <= targetDate;
+      const due = parseDateOnlyLocal(act.nextDueDate);
+      return due && targetDate ? due <= targetDate : true;
     });
   } else if (periodFilter && periodFilter !== 'all') {
     const today = new Date();
@@ -724,9 +820,8 @@ function loadTechnicianActivities() {
 
     myActivities = myActivities.filter(act => {
       if (!act.nextDueDate) return true;
-      const due = new Date(act.nextDueDate);
-      due.setHours(0,0,0,0);
-      return due <= limitDate;
+      const due = parseDateOnlyLocal(act.nextDueDate);
+      return due ? due <= limitDate : true;
     });
   }
 
@@ -740,7 +835,7 @@ function loadTechnicianActivities() {
 
   myActivities.forEach(act => {
     // Check if overdue
-    const isOverdue = act.nextDueDate && new Date(act.nextDueDate) < new Date().setHours(0,0,0,0);
+    const isOverdue = isDateOverdue(act.nextDueDate);
     
     const card = document.createElement('div');
     card.className = 'card';
@@ -897,7 +992,7 @@ async function validateAndExecute(scannedCode) {
     const idx = activitiesList.findIndex(a => a.id === currentExecutingActivity.id);
     if (idx > -1) {
       const today = new Date();
-      activitiesList[idx].lastExecuted = today.toISOString().split('T')[0];
+      activitiesList[idx].lastExecuted = formatDateKey(today);
       // Next Due Date = Today + Periodicity
       activitiesList[idx].nextDueDate = getFutureDate(activitiesList[idx].periodicity);
     }
@@ -1015,7 +1110,7 @@ async function registerFcmToken() {
   try {
     let swReg = null;
     if ('serviceWorker' in navigator) {
-      swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+      swReg = await registerAppServiceWorker();
     }
 
     const tokenOptions = { vapidKey: FCM_VAPID_KEY };
@@ -1053,7 +1148,20 @@ function getNextBusinessDay(date) {
   const day = d.getDay(); // 0=Sun, 6=Sat
   if (day === 6) d.setDate(d.getDate() + 2); // Sat -> Mon
   else if (day === 0) d.setDate(d.getDate() + 1); // Sun -> Mon
-  return d.toISOString().split('T')[0];
+  return formatDateKey(d);
+}
+
+function registerAppServiceWorker() {
+  if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+  if (!appServiceWorkerRegistrationPromise) {
+    appServiceWorkerRegistrationPromise = navigator.serviceWorker
+      .register('./firebase-messaging-sw.js')
+      .catch(error => {
+        appServiceWorkerRegistrationPromise = null;
+        throw error;
+      });
+  }
+  return appServiceWorkerRegistrationPromise;
 }
 
 // ----------------------------------------------------
@@ -1083,7 +1191,7 @@ function formatDateTime(isoString) {
 window.addEventListener('DOMContentLoaded', async () => {
   // Service Worker Registration
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js')
+    registerAppServiceWorker()
       .then(reg => console.log('Service Worker registrado com sucesso!', reg))
       .catch(err => console.error('Erro ao registrar Service Worker:', err));
   }
@@ -1098,6 +1206,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     updateHeader();
     if (currentUser.role === 'admin') {
       loadAdminUsers();
+      loadAdminActivities();
       showPage('admin-activities');
     } else {
       loadTechnicianActivities();

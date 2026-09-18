@@ -292,6 +292,13 @@
             <input type="number" id="activity-periodicity" class="input-control" placeholder="Ex: 7" min="1" required>
           </div>
           <div class="form-group">
+            <label for="activity-first-date">Data da Primeira Inspeção</label>
+            <input type="date" id="activity-first-date" class="input-control" required>
+            <small id="activity-first-date-help" style="color: var(--text-secondary); font-size: 0.8rem;">
+              Após a primeira execução, as próximas datas serão calculadas pela periodicidade.
+            </small>
+          </div>
+          <div class="form-group">
             <label for="activity-qrcode">Código Identificador do QR Code</label>
             <input type="text" id="activity-qrcode" class="input-control" placeholder="Código colado na máquina (ex: CNC-01)" required>
           </div>
