@@ -50,6 +50,7 @@ const DEFAULT_ACTIVITIES = [
     qrCode: 'COMP-01',
     assignedTo: ['cristiano'], // usernames dos técnicos
     lastExecuted: null,
+    firstDueDate: getFutureDate(0),
     nextDueDate: getFutureDate(0) // Disponível hoje
   },
   { 
@@ -60,6 +61,7 @@ const DEFAULT_ACTIVITIES = [
     qrCode: 'TORNO-02',
     assignedTo: ['cristiano'],
     lastExecuted: null,
+    firstDueDate: getFutureDate(1),
     nextDueDate: getFutureDate(1) // Disponível amanhã
   }
 ];
@@ -601,6 +603,8 @@ function openActivityModal(id = '') {
   const modal = document.getElementById('activity-modal');
   const title = document.getElementById('activity-modal-title');
   const techContainer = document.getElementById('activity-tech-checkboxes');
+  const firstDateInput = document.getElementById('activity-first-date');
+  const firstDateHelp = document.getElementById('activity-first-date-help');
   
   // Render technicians checklist
   techContainer.innerHTML = '';
@@ -618,6 +622,10 @@ function openActivityModal(id = '') {
   document.getElementById('activity-title').value = '';
   document.getElementById('activity-description').value = '';
   document.getElementById('activity-periodicity').value = '';
+  firstDateInput.value = getFutureDate(0);
+  firstDateInput.disabled = false;
+  firstDateInput.required = true;
+  firstDateHelp.innerText = 'Após a primeira execução, as próximas datas serão calculadas pela periodicidade.';
   document.getElementById('activity-qrcode').value = '';
 
   if (id) {
@@ -629,6 +637,17 @@ function openActivityModal(id = '') {
       document.getElementById('activity-description').value = act.description;
       document.getElementById('activity-periodicity').value = act.periodicity;
       document.getElementById('activity-qrcode').value = act.qrCode;
+
+      if (act.lastExecuted) {
+        // The recurrence cycle has already started, so its next date must keep
+        // following the last execution instead of being reset by this form.
+        firstDateInput.value = act.firstDueDate || '';
+        firstDateInput.disabled = true;
+        firstDateInput.required = false;
+        firstDateHelp.innerText = 'O ciclo já foi iniciado. A próxima inspeção continua sendo calculada a partir da última execução.';
+      } else {
+        firstDateInput.value = act.firstDueDate || act.nextDueDate || getFutureDate(0);
+      }
 
       // Select assigned techs
       const checkboxes = document.querySelectorAll('input[name="assignedTechs"]');
@@ -655,6 +674,7 @@ async function saveActivityForm(e) {
   const title = document.getElementById('activity-title').value.trim();
   const description = document.getElementById('activity-description').value.trim();
   const periodicity = parseInt(document.getElementById('activity-periodicity').value);
+  const firstDueDate = document.getElementById('activity-first-date').value;
   const qrCode = document.getElementById('activity-qrcode').value.trim();
 
   // Get selected techs
@@ -663,8 +683,16 @@ async function saveActivityForm(e) {
     assignedTo.push(cb.value);
   });
 
-  if (!title || !periodicity || !qrCode) {
-    alert("Por favor, preencha os campos obrigatórios (Título, Periodicidade e Código QR).");
+  const existingActivity = id ? activitiesList.find(a => a.id === id) : null;
+  const cycleAlreadyStarted = Boolean(existingActivity && existingActivity.lastExecuted);
+
+  if (!title || !periodicity || !qrCode || (!cycleAlreadyStarted && !firstDueDate)) {
+    alert("Por favor, preencha os campos obrigatórios (Título, Periodicidade, Primeira Inspeção e Código QR).");
+    return;
+  }
+
+  if (firstDueDate && !parseDateOnlyLocal(firstDueDate)) {
+    alert('Informe uma data válida para a primeira inspeção.');
     return;
   }
 
@@ -677,9 +705,11 @@ async function saveActivityForm(e) {
       activitiesList[idx].periodicity = periodicity;
       activitiesList[idx].qrCode = qrCode;
       activitiesList[idx].assignedTo = assignedTo;
-      // recalculate next due date if never executed
+      // Before the first execution, the admin can reschedule the starting
+      // date. Once executed, recurrence remains anchored to lastExecuted.
       if (!activitiesList[idx].lastExecuted) {
-        activitiesList[idx].nextDueDate = getFutureDate(0);
+        activitiesList[idx].firstDueDate = firstDueDate;
+        activitiesList[idx].nextDueDate = firstDueDate;
       }
     }
   } else {
@@ -693,7 +723,8 @@ async function saveActivityForm(e) {
       qrCode,
       assignedTo,
       lastExecuted: null,
-      nextDueDate: getFutureDate(0) // Available today
+      firstDueDate,
+      nextDueDate: firstDueDate
     });
   }
 

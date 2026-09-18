@@ -112,6 +112,70 @@ test('date-only comparisons keep today on the local calendar day', () => {
   );
 });
 
+test('a new activity uses the selected first inspection date', async () => {
+  const context = createAppContext();
+  const values = {
+    'activity-id': '',
+    'activity-title': 'Inspeção programada',
+    'activity-description': 'Verificar equipamento',
+    'activity-periodicity': '7',
+    'activity-first-date': '2026-10-05',
+    'activity-qrcode': 'EQ-01'
+  };
+
+  for (const [id, value] of Object.entries(values)) {
+    context.document.getElementById(id).value = value;
+  }
+
+  vm.runInContext(`
+    activitiesList = [];
+    saveActivities = async () => {};
+    loadAdminActivities = () => {};
+  `, context);
+
+  await vm.runInContext('saveActivityForm({ preventDefault() {} })', context);
+
+  assert.equal(vm.runInContext('activitiesList.length', context), 1);
+  assert.equal(vm.runInContext('activitiesList[0].firstDueDate', context), '2026-10-05');
+  assert.equal(vm.runInContext('activitiesList[0].nextDueDate', context), '2026-10-05');
+  assert.equal(vm.runInContext('activitiesList[0].periodicity', context), 7);
+});
+
+test('after the first execution, the next date follows the configured periodicity', async () => {
+  const context = createAppContext();
+  context.setTimeout = callback => callback();
+  context.document.getElementById('exec-comment').value = '';
+
+  vm.runInContext(`
+    currentUser = { username: 'tech', name: 'Técnico', role: 'tecnico' };
+    activitiesList = [{
+      id: 'a1',
+      title: 'Inspeção',
+      qrCode: 'EQ-01',
+      periodicity: 7,
+      firstDueDate: '2026-10-05',
+      lastExecuted: null,
+      nextDueDate: '2026-10-05'
+    }];
+    currentExecutingActivity = activitiesList[0];
+    addHistoryRecord = async () => {};
+    saveActivities = async () => {};
+    loadTechnicianActivities = () => {};
+    showPage = () => {};
+  `, context);
+
+  await vm.runInContext("validateAndExecute('EQ-01')", context);
+
+  assert.equal(
+    vm.runInContext('activitiesList[0].lastExecuted', context),
+    vm.runInContext('formatDateKey(new Date())', context)
+  );
+  assert.equal(
+    vm.runInContext('activitiesList[0].nextDueDate', context),
+    vm.runInContext('getFutureDate(7)', context)
+  );
+});
+
 test('Firebase user deletion removes the document and updates assignments in one batch', async () => {
   const context = createAppContext();
   const operations = [];
