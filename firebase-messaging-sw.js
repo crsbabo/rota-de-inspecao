@@ -15,6 +15,46 @@ firebase.initializeApp(firebaseConfig);
 
 const messaging = firebase.messaging();
 
+// The PWA cache and Firebase Messaging share this single service worker.
+// Registering separate workers for the same scope causes one to replace the
+// other, disabling either offline caching or background notifications.
+const CACHE_NAME = 'rota-inspecao-v6';
+const ASSETS = [
+  './',
+  './index.html',
+  './styles.css',
+  './app.js',
+  './manifest.json',
+  './icon.svg',
+  './firebase-messaging-sw.js',
+  './sw.js'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.map(key => key !== CACHE_NAME ? caches.delete(key) : undefined)
+      ))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith(
+    caches.match(event.request).then(cachedResponse => cachedResponse || fetch(event.request))
+  );
+});
+
 // Handle background messages when app is closed or in background
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Mensagem recebida em segundo plano:', payload);
