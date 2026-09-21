@@ -1017,7 +1017,26 @@ async function validateAndExecute(scannedCode) {
  * Updates the notification status section on the technician page.
  * Always visible — shows current status and enable button when needed.
  */
-function checkNotificationBanner() {
+function setNotificationBannerState(iconValue, message, color, buttonLabel = null) {
+  const icon = document.getElementById('notif-status-icon');
+  const text = document.getElementById('notif-status-text');
+  const btn = document.getElementById('btn-enable-notifications');
+  if (!icon || !text || !btn) return;
+
+  icon.textContent = iconValue;
+  text.textContent = message;
+  text.style.color = color;
+  btn.textContent = buttonLabel || 'Ativar Notificações';
+  btn.style.display = buttonLabel ? 'inline-flex' : 'none';
+}
+
+function isNotificationEnvironmentSupported() {
+  const isLocalFile = window.location && window.location.protocol === 'file:';
+  const isExplicitlyInsecure = window.isSecureContext === false;
+  return !isLocalFile && !isExplicitlyInsecure;
+}
+
+async function checkNotificationBanner() {
   const section = document.getElementById('notification-section');
   const icon = document.getElementById('notif-status-icon');
   const text = document.getElementById('notif-status-text');
@@ -1033,42 +1052,44 @@ function checkNotificationBanner() {
   
   section.style.display = 'block';
 
+  if (!isNotificationEnvironmentSupported()) {
+    setNotificationBannerState(
+      '⚠️',
+      'Notificações indisponíveis no arquivo local. Abra a versão publicada do aplicativo.',
+      '#f59e0b'
+    );
+    return;
+  }
+
   // Check if browser supports notifications
   if (!('Notification' in window)) {
-    icon.textContent = '🚫';
-    text.textContent = 'Seu navegador não suporta notificações push.';
-    text.style.color = 'var(--text-secondary)';
-    btn.style.display = 'none';
+    setNotificationBannerState('🚫', 'Seu navegador não suporta notificações push.', 'var(--text-secondary)');
     return;
   }
 
   // Check if messaging is available
   if (!messaging) {
-    icon.textContent = '⚠️';
-    text.textContent = 'Firebase Messaging não disponível. Verifique a conexão.';
-    text.style.color = '#f59e0b';
-    btn.style.display = 'none';
+    setNotificationBannerState('⚠️', 'Firebase Messaging não disponível. Verifique a conexão.', '#f59e0b');
     return;
   }
 
   if (Notification.permission === 'granted') {
-    icon.textContent = '✅';
-    text.textContent = 'Notificações ativadas — alertas nos dias úteis.';
-    text.style.color = '#22c55e';
-    btn.style.display = 'none';
-    // Silently refresh token
-    registerFcmToken();
+    setNotificationBannerState('⏳', 'Confirmando o cadastro deste aparelho...', 'var(--text-secondary)');
+    const registered = await registerFcmToken(false);
+    if (registered) {
+      setNotificationBannerState('✅', 'Notificações ativadas — alertas nos dias úteis.', '#22c55e');
+    } else {
+      setNotificationBannerState(
+        '⚠️',
+        'Permissão concedida, mas o aparelho ainda não foi registrado.',
+        '#f59e0b',
+        'Tentar novamente'
+      );
+    }
   } else if (Notification.permission === 'denied') {
-    icon.textContent = '🔕';
-    text.textContent = 'Notificações bloqueadas. Ative nas configurações do navegador.';
-    text.style.color = '#ef4444';
-    btn.style.display = 'none';
+    setNotificationBannerState('🔕', 'Notificações bloqueadas. Ative nas configurações do navegador.', '#ef4444');
   } else {
-    // Permission not decided — show activation button
-    icon.textContent = '🔔';
-    text.textContent = 'Receba alertas de inspeções pendentes.';
-    text.style.color = 'var(--text-secondary)';
-    btn.style.display = 'inline-flex';
+    setNotificationBannerState('🔔', 'Receba alertas de inspeções pendentes.', 'var(--text-secondary)', 'Ativar Notificações');
   }
 }
 
@@ -1077,6 +1098,11 @@ function checkNotificationBanner() {
  * Requests browser permission and saves FCM token to Firestore.
  */
 async function requestNotificationPermission() {
+  if (!isNotificationEnvironmentSupported()) {
+    await checkNotificationBanner();
+    alert('Abra a versão publicada do aplicativo para ativar as notificações.');
+    return;
+  }
   if (!messaging) {
     alert('Notificações Push não são suportadas neste navegador.');
     return;
@@ -1084,11 +1110,21 @@ async function requestNotificationPermission() {
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
-      await registerFcmToken();
-      checkNotificationBanner(); // Refresh status display
-      alert('✅ Notificações ativadas! Você receberá alertas de inspeções pendentes nos dias úteis.');
+      setNotificationBannerState('⏳', 'Registrando este aparelho...', 'var(--text-secondary)');
+      const registered = await registerFcmToken(true);
+      if (registered) {
+        setNotificationBannerState('✅', 'Notificações ativadas — alertas nos dias úteis.', '#22c55e');
+        alert('✅ Notificações ativadas! Você receberá alertas de inspeções pendentes nos dias úteis.');
+      } else {
+        setNotificationBannerState(
+          '⚠️',
+          'Permissão concedida, mas o aparelho ainda não foi registrado.',
+          '#f59e0b',
+          'Tentar novamente'
+        );
+      }
     } else {
-      checkNotificationBanner(); // Refresh status display
+      await checkNotificationBanner();
       alert('Permissão de notificação negada. Você pode ativar novamente nas configurações do seu navegador.');
     }
   } catch (err) {
@@ -1118,8 +1154,8 @@ function createNotificationDeviceId(token) {
  * The token-keyed document is overwritten when another user signs in on the
  * same browser, preventing one device from belonging to two users.
  */
-async function registerFcmToken() {
-  if (!messaging || !useFirebase || !currentUser) return;
+async function registerFcmToken(showErrors = true) {
+  if (!messaging || !useFirebase || !currentUser) return false;
   try {
     let swReg = null;
     if ('serviceWorker' in navigator) {
@@ -1164,13 +1200,18 @@ async function registerFcmToken() {
       localStorage.setItem('notification_device_id', deviceId);
       localStorage.setItem('notification_device_user', currentUser.username);
       console.log('FCM Token salvo no Firestore com sucesso.');
+      return true;
     } else {
       console.warn('Nenhum FCM Token obtido. Verifique o Service Worker e a VAPID Key.');
-      alert('⚠️ O navegador concedeu a permissão, mas o token de notificação não pôde ser gerado.');
+      if (showErrors) {
+        alert('⚠️ O navegador concedeu a permissão, mas o token de notificação não pôde ser gerado.');
+      }
+      return false;
     }
   } catch (err) {
     console.error('Erro ao obter/salvar FCM Token:', err);
-    alert('⚠️ Erro ao registrar notificações: ' + err.message);
+    if (showErrors) alert('⚠️ Erro ao registrar notificações: ' + err.message);
+    return false;
   }
 }
 

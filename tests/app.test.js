@@ -48,6 +48,11 @@ function createAppContext(options = {}) {
   const localStorage = options.localStorage || createStorage();
   const sessionStorage = options.sessionStorage || createStorage();
 
+  const notification = {
+    permission: options.notificationPermission || 'default',
+    requestPermission: async () => options.notificationPermission || 'default'
+  };
+
   const context = vm.createContext({
     alert() {},
     clearTimeout,
@@ -78,10 +83,13 @@ function createAppContext(options = {}) {
         }
       }
     },
-    Notification: { permission: 'default', requestPermission: async () => 'default' },
+    Notification: notification,
     sessionStorage,
     setTimeout,
     window: {
+      Notification: notification,
+      isSecureContext: options.isSecureContext ?? true,
+      location: { protocol: options.protocol || 'https:' },
       addEventListener(type, callback) {
         if (type === 'DOMContentLoaded') context.__domReady = callback;
       }
@@ -152,6 +160,39 @@ test('browser notification device identifiers are stable and token-specific', ()
     vm.runInContext("createNotificationDeviceId('token-a')", context),
     vm.runInContext("createNotificationDeviceId('token-b')", context)
   );
+});
+
+test('local file mode explains why notifications cannot be activated', async () => {
+  const context = createAppContext({ protocol: 'file:', isSecureContext: false });
+  vm.runInContext(`
+    currentUser = { username: 'tech', role: 'tecnico' };
+    messaging = { getToken: async () => 'token' };
+  `, context);
+
+  await vm.runInContext('checkNotificationBanner()', context);
+
+  assert.match(
+    context.document.getElementById('notif-status-text').textContent,
+    /indisponíveis no arquivo local/
+  );
+  assert.equal(context.document.getElementById('btn-enable-notifications').style.display, 'none');
+});
+
+test('granted browser permission is not shown as active when Firebase registration fails', async () => {
+  const context = createAppContext({ notificationPermission: 'granted' });
+  vm.runInContext(`
+    currentUser = { username: 'tech', role: 'tecnico' };
+    useFirebase = true;
+    messaging = { getToken: async () => { throw new Error('registration failed'); } };
+  `, context);
+
+  await vm.runInContext('checkNotificationBanner()', context);
+
+  const statusText = context.document.getElementById('notif-status-text').textContent;
+  assert.doesNotMatch(statusText, /Notificações ativadas/);
+  assert.match(statusText, /ainda não foi registrado/);
+  assert.equal(context.document.getElementById('btn-enable-notifications').style.display, 'inline-flex');
+  assert.equal(context.document.getElementById('btn-enable-notifications').textContent, 'Tentar novamente');
 });
 
 test('technician execution offers QR scanning only while keeping the expected code visible', () => {
