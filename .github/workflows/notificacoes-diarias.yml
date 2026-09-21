@@ -2,13 +2,18 @@ name: Notificações Diárias de Inspeção
 
 on:
   schedule:
-    - cron: '35 10 * * 1-5'
+    # Tentativas redundantes próximas de 07:35 BRT. O script usa um registro
+    # diário no Firestore para garantir que apenas a primeira envie o alerta.
+    - cron: '20,35,50 10 * * 1-5'
   workflow_dispatch:
 
 jobs:
   enviar-notificacoes:
     name: Enviar Push de Inspeções Pendentes
     runs-on: ubuntu-latest
+    concurrency:
+      group: notificacoes-diarias
+      cancel-in-progress: false
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4
