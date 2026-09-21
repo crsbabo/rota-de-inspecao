@@ -249,6 +249,21 @@ test('camera access failure only offers a retry and cannot complete the activity
   assert.equal(vm.runInContext('historyList.length', context), 0);
 });
 
+test('missing QR reader library shows a recoverable error instead of getting stuck', async () => {
+  const context = createAppContext();
+  vm.runInContext(`
+    Html5Qrcode = undefined;
+    currentExecutingActivity = { id: 'a1', qrCode: 'EQ-01' };
+  `, context);
+
+  await vm.runInContext('startScanner()', context);
+
+  const feedback = context.document.getElementById('scanner-feedback');
+  assert.equal(context.document.getElementById('btn-start-scanner').style.display, 'block');
+  assert.equal(feedback.className, 'badge badge-danger');
+  assert.match(feedback.innerText, /leitor de QR Code não carregou/);
+});
+
 test('a new activity uses the selected first inspection date', async () => {
   const context = createAppContext();
   const values = {

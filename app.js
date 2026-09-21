@@ -902,34 +902,43 @@ function openExecutionPage(id) {
   showPage('tech-execute');
 }
 
-function startScanner() {
+async function startScanner() {
   if (html5QrScanner || qrScanProcessing) return;
 
-  document.getElementById('btn-start-scanner').style.display = 'none';
+  const startButton = document.getElementById('btn-start-scanner');
+  startButton.style.display = 'none';
   const feedback = document.getElementById('scanner-feedback');
   feedback.style.display = 'none';
-  
-  // Initialize HTML5 QR Code Scanner
-  html5QrScanner = new Html5Qrcode("qr-reader");
-  
-  const config = { 
-    fps: 10, 
-    qrbox: { width: 250, height: 250 } 
-  };
-  
-  return html5QrScanner.start(
-    { facingMode: "environment" }, 
-    config, 
-    onScanSuccess, 
-    onScanFailure
-  ).catch(err => {
+
+  try {
+    if (typeof Html5Qrcode !== 'function') {
+      throw new Error('QR_READER_UNAVAILABLE');
+    }
+
+    // Initialize HTML5 QR Code Scanner
+    html5QrScanner = new Html5Qrcode("qr-reader");
+
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 250 }
+    };
+
+    await html5QrScanner.start(
+      { facingMode: "environment" },
+      config,
+      onScanSuccess,
+      onScanFailure
+    );
+  } catch (err) {
     console.error("Erro ao iniciar câmera: ", err);
     html5QrScanner = null;
-    document.getElementById('btn-start-scanner').style.display = 'block';
+    startButton.style.display = 'block';
     feedback.className = 'badge badge-danger';
-    feedback.innerText = 'Não foi possível acessar a câmera. Verifique a permissão e tente novamente.';
+    feedback.innerText = err && err.message === 'QR_READER_UNAVAILABLE'
+      ? 'O leitor de QR Code não carregou. Atualize a página e tente novamente.'
+      : 'Não foi possível acessar a câmera. Verifique a permissão e tente novamente.';
     feedback.style.display = 'inline-block';
-  });
+  }
 }
 
 function stopScanner() {
