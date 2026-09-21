@@ -18,7 +18,7 @@ const messaging = firebase.messaging();
 // The PWA cache and Firebase Messaging share this single service worker.
 // Registering separate workers for the same scope causes one to replace the
 // other, disabling either offline caching or background notifications.
-const CACHE_NAME = 'rota-inspecao-v8';
+const CACHE_NAME = 'rota-inspecao-v9';
 const ASSETS = [
   './',
   './index.html',

@@ -6,6 +6,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 const appSource = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+const indexSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const messagingWorkerSource = fs.readFileSync(path.join(root, 'firebase-messaging-sw.js'), 'utf8');
 const legacyWorkerSource = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const notificationUtils = require('../scripts/notification-utils');
@@ -151,6 +152,60 @@ test('browser notification device identifiers are stable and token-specific', ()
     vm.runInContext("createNotificationDeviceId('token-a')", context),
     vm.runInContext("createNotificationDeviceId('token-b')", context)
   );
+});
+
+test('technician execution offers QR scanning only while keeping the expected code visible', () => {
+  const context = createAppContext();
+
+  assert.doesNotMatch(indexSource, /Digitar Código|manual-entry-container|exec-manual-code|handleManualSubmit/);
+  assert.match(indexSource, /Código esperado:/);
+  assert.equal(vm.runInContext("typeof showManualEntry", context), 'undefined');
+  assert.equal(vm.runInContext("typeof handleManualSubmit", context), 'undefined');
+});
+
+test('an invalid scanned QR code cannot complete the activity', async () => {
+  const context = createAppContext();
+  vm.runInContext(`
+    currentUser = { username: 'tech', name: 'Técnico', role: 'tecnico' };
+    currentExecutingActivity = {
+      id: 'a1',
+      title: 'Inspeção',
+      qrCode: 'EQ-01',
+      periodicity: 7,
+      nextDueDate: '2026-09-21'
+    };
+    activitiesList = [currentExecutingActivity];
+    historyList = [];
+    saveActivities = async () => { throw new Error('should not save'); };
+    addHistoryRecord = async () => { throw new Error('should not add history'); };
+  `, context);
+
+  const completed = await vm.runInContext("validateAndExecute('WRONG-CODE')", context);
+
+  assert.equal(completed, false);
+  assert.equal(vm.runInContext('historyList.length', context), 0);
+  assert.equal(vm.runInContext("activitiesList[0].nextDueDate", context), '2026-09-21');
+  assert.equal(context.document.getElementById('scanner-feedback').className, 'badge badge-danger');
+});
+
+test('camera access failure only offers a retry and cannot complete the activity', async () => {
+  const context = createAppContext();
+  vm.runInContext(`
+    Html5Qrcode = function Html5Qrcode() {
+      this.start = async () => { throw new Error('camera blocked'); };
+    };
+    currentExecutingActivity = { id: 'a1', qrCode: 'EQ-01' };
+    activitiesList = [currentExecutingActivity];
+    historyList = [];
+  `, context);
+
+  await vm.runInContext('startScanner()', context);
+
+  const feedback = context.document.getElementById('scanner-feedback');
+  assert.equal(context.document.getElementById('btn-start-scanner').style.display, 'block');
+  assert.equal(feedback.className, 'badge badge-danger');
+  assert.match(feedback.innerText, /Verifique a permissão e tente novamente/);
+  assert.equal(vm.runInContext('historyList.length', context), 0);
 });
 
 test('a new activity uses the selected first inspection date', async () => {

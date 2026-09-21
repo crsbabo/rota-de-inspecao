@@ -195,7 +195,7 @@
         <div class="qr-scanner-section">
           <h4>Validação de QR Code no Local</h4>
           <p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center;">
-            Para concluir a atividade, aponte a câmera para o QR Code correspondente ou digite o código manual.
+            Para concluir a atividade, aponte a câmera para o QR Code correspondente.
           </p>
           <div style="font-size: 0.85rem; margin-bottom: 0.5rem;">
             Código esperado: <strong id="exec-qrcode-expected" class="badge badge-info"></strong>
@@ -213,18 +213,6 @@
 
           <div style="display: flex; gap: 0.75rem; width: 100%; margin-top: 0.5rem; justify-content: center;">
             <button id="btn-start-scanner" class="btn btn-primary" onclick="startScanner()">Ativar Câmera</button>
-            <button id="btn-show-manual" class="btn btn-secondary" onclick="showManualEntry()">Digitar Código</button>
-          </div>
-
-          <!-- Manual Code Entry Form -->
-          <div id="manual-entry-container" style="display: none; width: 100%; margin-top: 1rem;">
-            <div class="form-group">
-              <label for="exec-manual-code">Código do QR Code</label>
-              <div style="display: flex; gap: 0.5rem;">
-                <input type="text" id="exec-manual-code" class="input-control" placeholder="Digite o código gravado no local">
-                <button class="btn btn-success" onclick="handleManualSubmit()">Validar</button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
