@@ -107,6 +107,14 @@
           <div id="admin-history" class="admin-sub-page">
             <div class="section-header">
               <h2>Histórico de Inspeções Realizadas</h2>
+              <div class="history-export-actions" aria-label="Exportar histórico de inspeções">
+                <button class="btn btn-secondary btn-sm" type="button" onclick="exportHistoryToExcel()" title="Baixar planilha compatível com Excel">
+                  Exportar Excel
+                </button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="exportHistoryToPdf()" title="Abrir relatório para salvar em PDF">
+                  Exportar PDF
+                </button>
+              </div>
             </div>
             <div class="table-responsive">
               <table>

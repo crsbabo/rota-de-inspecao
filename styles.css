@@ -377,6 +377,27 @@ main {
   font-weight: 700;
 }
 
+.history-export-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+@media (max-width: 640px) {
+  #admin-history .section-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .history-export-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+}
+
 /* User & Activity Management Cards */
 .grid-cards {
   display: grid;

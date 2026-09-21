@@ -264,6 +264,43 @@ test('missing QR reader library shows a recoverable error instead of getting stu
   assert.match(feedback.innerText, /leitor de QR Code não carregou/);
 });
 
+test('history export always includes the complete current list', () => {
+  const context = createAppContext();
+  vm.runInContext(`
+    historyList = [
+      { timestamp: '2026-09-21T16:39:00', activityTitle: 'Inspeção Transor', techName: 'Cristiano Sbabo', comment: '' },
+      { timestamp: '2026-09-21T11:17:00', activityTitle: 'Nível de óleo', techName: 'Cristiano Sbabo', comment: 'teste; com "aspas"' }
+    ];
+  `, context);
+
+  let csv = vm.runInContext('buildHistoryCsv()', context);
+  assert.match(csv, /Inspeção Transor/);
+  assert.match(csv, /Nível de óleo/);
+  assert.match(csv, /"teste; com ""aspas"""/);
+
+  vm.runInContext(`historyList.push({ timestamp: '2026-09-22T08:00:00', activityTitle: 'Novo registro', techName: 'Cristiano Sbabo', comment: '=SUM(A1:A2)' })`, context);
+  csv = vm.runInContext('buildHistoryCsv()', context);
+  assert.match(csv, /Novo registro/);
+  assert.match(csv, /'=SUM\(A1:A2\)/);
+  assert.equal(vm.runInContext('getHistoryExportRows().length', context), 3);
+});
+
+test('printable history report includes every record and repeats the table header', () => {
+  const context = createAppContext();
+  vm.runInContext(`
+    historyList = [
+      { timestamp: '2026-09-21T16:39:00', activityTitle: 'Inspeção <Transor>', techName: 'Cristiano Sbabo', comment: 'Concluído' },
+      { timestamp: '2026-09-22T08:00:00', activityTitle: 'Novo registro', techName: 'Cristiano Sbabo', comment: '' }
+    ];
+  `, context);
+
+  const html = vm.runInContext('buildHistoryPrintDocument()', context);
+  assert.match(html, /2 registro\(s\)/);
+  assert.match(html, /Inspeção &lt;Transor&gt;/);
+  assert.match(html, /Novo registro/);
+  assert.match(html, /table-header-group/);
+});
+
 test('a new activity uses the selected first inspection date', async () => {
   const context = createAppContext();
   const values = {

@@ -783,6 +783,142 @@ function loadAdminHistory() {
   });
 }
 
+function getHistoryExportRows(records = historyList) {
+  return records.map(hist => ({
+    dataHora: formatDateTime(hist.timestamp),
+    atividade: hist.activityTitle || '-',
+    tecnico: hist.techName || hist.techUsername || '-',
+    comentario: hist.comment || '-'
+  }));
+}
+
+function protectSpreadsheetCell(value) {
+  const text = String(value ?? '');
+  return /^[=+\-@]/.test(text) ? `'${text}` : text;
+}
+
+function escapeCsvCell(value) {
+  const text = protectSpreadsheetCell(value).replace(/"/g, '""');
+  return `"${text}"`;
+}
+
+function buildHistoryCsv(records = historyList) {
+  const headers = ['Data/Hora', 'Atividade', 'Técnico', 'Comentário do Técnico'];
+  const rows = getHistoryExportRows(records).map(row => [
+    row.dataHora,
+    row.atividade,
+    row.tecnico,
+    row.comentario
+  ]);
+
+  return '\uFEFF' + [headers, ...rows]
+    .map(row => row.map(escapeCsvCell).join(';'))
+    .join('\r\n');
+}
+
+function downloadHistoryFile(content, mimeType, filename) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportHistoryToExcel() {
+  if (historyList.length === 0) {
+    alert('Não há registros no histórico para exportar.');
+    return;
+  }
+
+  const filename = `historico-inspecoes-${formatDateKey(new Date())}.csv`;
+  downloadHistoryFile(buildHistoryCsv(), 'text/csv;charset=utf-8;', filename);
+}
+
+function escapeReportHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function buildHistoryPrintDocument(records = historyList) {
+  const rows = getHistoryExportRows(records);
+  const tableRows = rows.map(row => `
+    <tr>
+      <td>${escapeReportHtml(row.dataHora)}</td>
+      <td>${escapeReportHtml(row.atividade)}</td>
+      <td>${escapeReportHtml(row.tecnico)}</td>
+      <td>${escapeReportHtml(row.comentario)}</td>
+    </tr>
+  `).join('');
+
+  return `<!DOCTYPE html>
+  <html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8">
+    <title>Histórico de Inspeções Realizadas</title>
+    <style>
+      @page { size: A4 landscape; margin: 12mm; }
+      * { box-sizing: border-box; }
+      body { color: #111827; font-family: Arial, sans-serif; font-size: 10pt; margin: 0; }
+      h1 { font-size: 18pt; margin: 0 0 4px; }
+      .meta { color: #4b5563; margin: 0 0 18px; }
+      table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid; page-break-inside: avoid; }
+      th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; word-break: break-word; }
+      th { background: #1e3a5f; color: white; }
+      th:nth-child(1), td:nth-child(1) { width: 18%; }
+      th:nth-child(2), td:nth-child(2) { width: 30%; }
+      th:nth-child(3), td:nth-child(3) { width: 22%; }
+      th:nth-child(4), td:nth-child(4) { width: 30%; }
+      tbody tr:nth-child(even) { background: #f8fafc; }
+    </style>
+  </head>
+  <body>
+    <h1>Histórico de Inspeções Realizadas</h1>
+    <p class="meta">${rows.length} registro(s) - relatório gerado em ${escapeReportHtml(formatDateTime(new Date().toISOString()))}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Data/Hora</th>
+          <th>Atividade</th>
+          <th>Técnico</th>
+          <th>Comentário do Técnico</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  </body>
+  </html>`;
+}
+
+function exportHistoryToPdf() {
+  if (historyList.length === 0) {
+    alert('Não há registros no histórico para exportar.');
+    return;
+  }
+
+  const reportWindow = window.open('', '_blank');
+  if (!reportWindow) {
+    alert('O navegador bloqueou a janela do relatório. Permita pop-ups para salvar o PDF.');
+    return;
+  }
+
+  reportWindow.addEventListener('load', () => {
+    reportWindow.focus();
+    reportWindow.print();
+  }, { once: true });
+  reportWindow.document.write(buildHistoryPrintDocument());
+  reportWindow.document.close();
+}
+
 // ----------------------------------------------------
 // TECHNICIAN: HOME & FILTERING
 // ----------------------------------------------------
