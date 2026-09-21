@@ -7,6 +7,7 @@ let usersList = [];
 let historyList = [];
 let html5QrScanner = null;
 let currentExecutingActivity = null;
+let qrScanProcessing = false;
 
 // Firebase configuration state
 let db = null;
@@ -891,12 +892,10 @@ function openExecutionPage(id) {
   document.getElementById('exec-instruction').innerText = act.description;
   document.getElementById('exec-qrcode-expected').innerText = act.qrCode;
   document.getElementById('exec-comment').value = '';
-  document.getElementById('exec-manual-code').value = '';
+  qrScanProcessing = false;
 
   // Setup UI
   document.getElementById('scanner-feedback').style.display = 'none';
-  document.getElementById('manual-entry-container').style.display = 'none';
-  document.getElementById('btn-show-manual').style.display = 'block';
   document.getElementById('qr-scanner-visual').style.display = 'flex';
   document.getElementById('btn-start-scanner').style.display = 'block';
 
@@ -904,7 +903,11 @@ function openExecutionPage(id) {
 }
 
 function startScanner() {
+  if (html5QrScanner || qrScanProcessing) return;
+
   document.getElementById('btn-start-scanner').style.display = 'none';
+  const feedback = document.getElementById('scanner-feedback');
+  feedback.style.display = 'none';
   
   // Initialize HTML5 QR Code Scanner
   html5QrScanner = new Html5Qrcode("qr-reader");
@@ -914,15 +917,18 @@ function startScanner() {
     qrbox: { width: 250, height: 250 } 
   };
   
-  html5QrScanner.start(
+  return html5QrScanner.start(
     { facingMode: "environment" }, 
     config, 
     onScanSuccess, 
     onScanFailure
   ).catch(err => {
     console.error("Erro ao iniciar câmera: ", err);
-    alert("Não foi possível acessar a câmera. Você pode digitar o código QR manualmente.");
-    showManualEntry();
+    html5QrScanner = null;
+    document.getElementById('btn-start-scanner').style.display = 'block';
+    feedback.className = 'badge badge-danger';
+    feedback.innerText = 'Não foi possível acessar a câmera. Verifique a permissão e tente novamente.';
+    feedback.style.display = 'inline-block';
   });
 }
 
@@ -937,37 +943,19 @@ function stopScanner() {
   }
 }
 
-function onScanSuccess(decodedText, decodedResult) {
+async function onScanSuccess(decodedText, decodedResult) {
+  if (qrScanProcessing) return;
+  qrScanProcessing = true;
+
   console.log(`Scan result: ${decodedText}`, decodedResult);
   stopScanner();
-  
-  // Fill manual code automatically to visualize
-  document.getElementById('exec-manual-code').value = decodedText;
-  showManualEntry(); // Show manual entry section to show decoded text
-  
-  validateAndExecute(decodedText);
+
+  const completed = await validateAndExecute(decodedText);
+  if (!completed) qrScanProcessing = false;
 }
 
 function onScanFailure(error) {
   // Silent logs to avoid flooding console, as it queries every frame
-}
-
-function showManualEntry() {
-  document.getElementById('manual-entry-container').style.display = 'block';
-  document.getElementById('btn-show-manual').style.display = 'none';
-  document.getElementById('qr-scanner-visual').style.display = 'none';
-  if (html5QrScanner) {
-    stopScanner();
-  }
-}
-
-async function handleManualSubmit() {
-  const enteredCode = document.getElementById('exec-manual-code').value.trim();
-  if (!enteredCode) {
-    alert("Por favor, digite o código QR.");
-    return;
-  }
-  validateAndExecute(enteredCode);
 }
 
 async function validateAndExecute(scannedCode) {
@@ -1009,11 +997,13 @@ async function validateAndExecute(scannedCode) {
       loadTechnicianActivities();
       showPage('tech-home');
     }, 1000);
+    return true;
 
   } else {
     feedback.className = 'badge badge-danger';
     feedback.innerText = `Código inválido. Lido: "${scannedCode}". Esperado: "${expectedCode}".`;
     feedback.style.display = 'inline-block';
+    return false;
   }
 }
 
