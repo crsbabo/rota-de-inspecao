@@ -6,6 +6,11 @@ on:
     # diário no Firestore para garantir que apenas a primeira envie o alerta.
     - cron: '20,35,50 10 * * 1-5'
   workflow_dispatch:
+    inputs:
+      test_username:
+        description: 'Usuário que receberá uma notificação de teste (deixe vazio para execução normal)'
+        required: false
+        type: string
 
 jobs:
   enviar-notificacoes:
@@ -26,4 +31,5 @@ jobs:
       - name: Executar script de notificações
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TEST_USERNAME: ${{ inputs.test_username }}
         run: node scripts/enviar-notificacoes.js
