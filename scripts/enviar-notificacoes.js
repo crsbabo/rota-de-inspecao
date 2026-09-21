@@ -83,7 +83,10 @@ async function clearInvalidRecipient(recipient) {
 
 async function main() {
   const { dateKey: todayKey, weekday } = getDateInTimeZone();
+  const testUsername = (process.env.TEST_USERNAME || '').trim().toLowerCase();
+  const isTest = Boolean(testUsername);
   console.log(`▶️ Executando verificação para ${todayKey} (${weekday}, America/Sao_Paulo)`);
+  if (isTest) console.log(`🧪 Modo de teste direcionado para '${testUsername}'.`);
 
   const [usersSnapshot, activitiesSnapshot] = await Promise.all([
     db.collection('users').get(),
@@ -108,33 +111,44 @@ async function main() {
   let skipped = 0;
 
   for (const recipient of recipients) {
+    if (isTest && recipient.username.toLowerCase() !== testUsername) continue;
+
     const activities = byTechnician[recipient.username] || [];
-    if (activities.length === 0) continue;
+    if (!isTest && activities.length === 0) continue;
 
     const summary = summarizeActivities(activities, todayKey);
-    const title = summary.overdue.length > 0
+    let title = summary.overdue.length > 0
       ? `⚠️ Inspeções pendentes (${summary.total})`
       : `📅 Inspeções programadas para hoje (${summary.total})`;
     const names = activities.slice(0, 3).map(activity => activity.title || 'Inspeção');
     const detail = summary.overdue.length > 0
       ? `${summary.overdue.length} em atraso e ${summary.dueToday.length} para hoje. `
       : '';
-    const body = detail + names.join(', ') + (summary.total > 3 ? ` e mais ${summary.total - 3}...` : '');
+    let body = detail + names.join(', ') + (summary.total > 3 ? ` e mais ${summary.total - 3}...` : '');
+
+    if (isTest) {
+      title = summary.total > 0 ? `🧪 TESTE — ${title}` : '🧪 TESTE — Rota de Inspeção';
+      body = summary.total > 0
+        ? body
+        : 'Simulação do alerta matinal. No momento não há atividades pendentes para este usuário.';
+    }
 
     const tokenHash = hashToken(recipient.token);
     const deliveryRef = db.collection('notificationDeliveries')
       .doc(`${todayKey}_${tokenHash}`);
-    const claimed = await claimDelivery(deliveryRef, {
-      dateKey: todayKey,
-      username: recipient.username,
-      tokenHash,
-      activityIds: activities.map(activity => activity.id)
-    });
+    if (!isTest) {
+      const claimed = await claimDelivery(deliveryRef, {
+        dateKey: todayKey,
+        username: recipient.username,
+        tokenHash,
+        activityIds: activities.map(activity => activity.id)
+      });
 
-    if (!claimed) {
-      skipped++;
-      console.log(`↩️ Envio já processado hoje para '${recipient.username}'.`);
-      continue;
+      if (!claimed) {
+        skipped++;
+        console.log(`↩️ Envio já processado hoje para '${recipient.username}'.`);
+        continue;
+      }
     }
 
     const message = {
@@ -161,15 +175,17 @@ async function main() {
 
     try {
       const messageId = await messaging.send(message);
-      await deliveryRef.set({
-        status: 'sent',
-        sentAt: admin.firestore.FieldValue.serverTimestamp(),
-        messageId
-      }, { merge: true });
+      if (!isTest) {
+        await deliveryRef.set({
+          status: 'sent',
+          sentAt: admin.firestore.FieldValue.serverTimestamp(),
+          messageId
+        }, { merge: true });
+      }
       sent++;
       console.log(`✅ FCM aceitou o envio para '${recipient.username}'.`);
     } catch (error) {
-      await deliveryRef.delete();
+      if (!isTest) await deliveryRef.delete();
       console.error(`❌ Erro FCM para '${recipient.username}':`, error.message);
       if (error.code === 'messaging/registration-token-not-registered' ||
           error.code === 'messaging/invalid-registration-token') {
@@ -177,6 +193,10 @@ async function main() {
         console.log(`🗑️ Destino inválido removido para '${recipient.username}'.`);
       }
     }
+  }
+
+  if (isTest && sent === 0) {
+    throw new Error(`Nenhum aparelho registrado foi encontrado para '${testUsername}'.`);
   }
 
   console.log(`🏁 Concluído: ${sent} enviado(s), ${skipped} duplicado(s) evitado(s).`);
