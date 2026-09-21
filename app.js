@@ -374,7 +374,12 @@ function updateHeader() {
   }
 }
 
-function logout() {
+async function logout() {
+  const userLeaving = currentUser;
+  if (userLeaving && userLeaving.role === 'tecnico') {
+    await unregisterCurrentNotificationDevice(userLeaving.username);
+  }
+
   currentUser = null;
   sessionStorage.removeItem('logged_user');
   updateHeader();
@@ -1058,7 +1063,7 @@ function checkNotificationBanner() {
 
   if (Notification.permission === 'granted') {
     icon.textContent = '✅';
-    text.textContent = 'Notificações ativadas — alertas às 07:35h nos dias úteis.';
+    text.textContent = 'Notificações ativadas — alertas nos dias úteis.';
     text.style.color = '#22c55e';
     btn.style.display = 'none';
     // Silently refresh token
@@ -1091,7 +1096,7 @@ async function requestNotificationPermission() {
     if (permission === 'granted') {
       await registerFcmToken();
       checkNotificationBanner(); // Refresh status display
-      alert('✅ Notificações ativadas! Você receberá alertas de inspeções pendentes todo dia útil às 07:35h.');
+      alert('✅ Notificações ativadas! Você receberá alertas de inspeções pendentes nos dias úteis.');
     } else {
       checkNotificationBanner(); // Refresh status display
       alert('Permissão de notificação negada. Você pode ativar novamente nas configurações do seu navegador.');
@@ -1103,7 +1108,25 @@ async function requestNotificationPermission() {
 }
 
 /**
- * Gets the FCM token for this device and saves it to the user's Firestore document.
+ * Builds a stable Firestore-safe identifier without exposing the FCM token in
+ * the document path. Two independent hashes make collisions very unlikely.
+ */
+function createNotificationDeviceId(token) {
+  let hashA = 2166136261;
+  let hashB = 5381;
+  for (let index = 0; index < token.length; index++) {
+    const code = token.charCodeAt(index);
+    hashA ^= code;
+    hashA = Math.imul(hashA, 16777619);
+    hashB = Math.imul(hashB, 33) ^ code;
+  }
+  return `device-${(hashA >>> 0).toString(16).padStart(8, '0')}${(hashB >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+/**
+ * Gets the FCM token for this device and associates it with the current user.
+ * The token-keyed document is overwritten when another user signs in on the
+ * same browser, preventing one device from belonging to two users.
  */
 async function registerFcmToken() {
   if (!messaging || !useFirebase || !currentUser) return;
@@ -1121,11 +1144,35 @@ async function registerFcmToken() {
     const token = await messaging.getToken(tokenOptions);
     if (token) {
       console.log('FCM Token registrado:', token);
+      const deviceId = createNotificationDeviceId(token);
+      const updatedAt = new Date().toISOString();
+
+      await db.collection('notificationDevices').doc(deviceId).set({
+        token,
+        username: currentUser.username,
+        updatedAt,
+        appSecretKey: APP_SECRET_KEY
+      });
+
       await db.collection('users').doc(currentUser.username).set({
         fcmToken: token,
-        fcmTokenUpdatedAt: new Date().toISOString(),
+        fcmTokenUpdatedAt: updatedAt,
         appSecretKey: APP_SECRET_KEY
       }, { merge: true });
+
+      const duplicateUsers = await db.collection('users').where('fcmToken', '==', token).get();
+      const duplicateBatch = db.batch();
+      let hasDuplicates = false;
+      duplicateUsers.forEach(doc => {
+        if (doc.id !== currentUser.username) {
+          duplicateBatch.set(doc.ref, { fcmToken: null, fcmTokenUpdatedAt: null }, { merge: true });
+          hasDuplicates = true;
+        }
+      });
+      if (hasDuplicates) await duplicateBatch.commit();
+
+      localStorage.setItem('notification_device_id', deviceId);
+      localStorage.setItem('notification_device_user', currentUser.username);
       console.log('FCM Token salvo no Firestore com sucesso.');
     } else {
       console.warn('Nenhum FCM Token obtido. Verifique o Service Worker e a VAPID Key.');
@@ -1134,6 +1181,31 @@ async function registerFcmToken() {
   } catch (err) {
     console.error('Erro ao obter/salvar FCM Token:', err);
     alert('⚠️ Erro ao registrar notificações: ' + err.message);
+  }
+}
+
+/**
+ * Explicit logout removes only this browser's association. Other devices for
+ * the same technician continue receiving notifications.
+ */
+async function unregisterCurrentNotificationDevice(username) {
+  if (!useFirebase || !db) return;
+
+  const deviceId = localStorage.getItem('notification_device_id');
+  const deviceUser = localStorage.getItem('notification_device_user');
+  if (!deviceId || deviceUser !== username) return;
+
+  try {
+    await db.collection('notificationDevices').doc(deviceId).delete();
+    await db.collection('users').doc(username).set({
+      fcmToken: null,
+      fcmTokenUpdatedAt: null,
+      appSecretKey: APP_SECRET_KEY
+    }, { merge: true });
+    localStorage.removeItem('notification_device_id');
+    localStorage.removeItem('notification_device_user');
+  } catch (error) {
+    console.warn('Não foi possível desvincular as notificações deste aparelho:', error.message);
   }
 }
 

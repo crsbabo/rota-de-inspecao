@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, '..');
 const appSource = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const messagingWorkerSource = fs.readFileSync(path.join(root, 'firebase-messaging-sw.js'), 'utf8');
 const legacyWorkerSource = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+const notificationUtils = require('../scripts/notification-utils');
 
 function createStorage(initial = {}) {
   const values = new Map(Object.entries(initial));
@@ -109,6 +110,46 @@ test('date-only comparisons keep today on the local calendar day', () => {
   assert.equal(
     vm.runInContext("formatDateKey(parseDateOnlyLocal('2026-09-18'))", context),
     '2026-09-18'
+  );
+});
+
+test('notification date uses the Sao Paulo calendar day', () => {
+  const instant = new Date('2026-09-22T01:30:00.000Z');
+  assert.deepEqual(notificationUtils.getDateInTimeZone(instant), {
+    dateKey: '2026-09-21',
+    weekday: 'Mon'
+  });
+});
+
+test('notification selection separates overdue and due-today activities', () => {
+  const activities = [
+    { id: 'old', nextDueDate: '2026-09-20' },
+    { id: 'today', nextDueDate: '2026-09-21' },
+    { id: 'future', nextDueDate: '2026-09-22' }
+  ];
+  const pending = notificationUtils.getPendingActivities(activities, '2026-09-21');
+  const summary = notificationUtils.summarizeActivities(pending, '2026-09-21');
+
+  assert.deepEqual(pending.map(activity => activity.id), ['old', 'today']);
+  assert.equal(summary.overdue.length, 1);
+  assert.equal(summary.dueToday.length, 1);
+  assert.equal(summary.total, 2);
+});
+
+test('notification delivery keys are stable per token', () => {
+  assert.equal(notificationUtils.hashToken('token-a'), notificationUtils.hashToken('token-a'));
+  assert.notEqual(notificationUtils.hashToken('token-a'), notificationUtils.hashToken('token-b'));
+});
+
+test('browser notification device identifiers are stable and token-specific', () => {
+  const context = createAppContext();
+  assert.equal(
+    vm.runInContext("createNotificationDeviceId('token-a')", context),
+    vm.runInContext("createNotificationDeviceId('token-a')", context)
+  );
+  assert.notEqual(
+    vm.runInContext("createNotificationDeviceId('token-a')", context),
+    vm.runInContext("createNotificationDeviceId('token-b')", context)
   );
 });
 

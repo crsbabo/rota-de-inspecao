@@ -1,10 +1,14 @@
-// scripts/enviar-notificacoes.js
-// Executado pelo GitHub Actions todo dia útil às 07:35 BRT
-// Envia Push Notifications via FCM para técnicos com inspeções pendentes
+// Executado pelo GitHub Actions em tentativas redundantes nos dias úteis.
+// O Firestore impede reenvios da mesma notificação no mesmo dia.
 
 const admin = require('firebase-admin');
+const {
+  getDateInTimeZone,
+  getPendingActivities,
+  hashToken,
+  summarizeActivities
+} = require('./notification-utils');
 
-// Carrega credenciais do Secret do GitHub
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
@@ -14,123 +18,171 @@ admin.initializeApp({
 const db = admin.firestore();
 const messaging = admin.messaging();
 
-async function main() {
-  const hoje = new Date();
-  const hojeUTC3 = new Date(hoje.getTime() - 3 * 60 * 60 * 1000);
-  const diaSemana = hojeUTC3.getDay();
-  const hojeStr = hojeUTC3.toISOString().split('T')[0];
+async function loadRecipients(usersSnapshot) {
+  const candidates = [];
 
-  console.log(`▶️  Executando verificação para a data: ${hojeStr} (dia da semana: ${diaSemana})`);
-
-  // 1. Buscar todos os usuários
-  const usersSnap = await db.collection('users').get();
-  console.log(`👥 Total de usuários no Firestore: ${usersSnap.size}`);
-
-  const tecnicosComToken = [];
-  usersSnap.forEach(doc => {
+  usersSnapshot.forEach(doc => {
     const data = doc.data();
-    console.log(`  👤 Usuário '${doc.id}': fcmToken=${data.fcmToken ? 'PRESENTE (' + data.fcmToken.substring(0, 15) + '...)' : 'AUSENTE'}`);
     if (data.fcmToken) {
-      tecnicosComToken.push({ username: doc.id, ...data });
+      candidates.push({
+        username: doc.id,
+        token: data.fcmToken,
+        updatedAt: data.fcmTokenUpdatedAt || '',
+        source: 'legacy',
+        ref: doc.ref
+      });
     }
   });
 
-  if (tecnicosComToken.length === 0) {
-    console.log('⚠️ Nenhum técnico com FCM Token cadastrado no banco.');
+  const devicesSnapshot = await db.collection('notificationDevices').get();
+  devicesSnapshot.forEach(doc => {
+    const data = doc.data();
+    if (data.token && data.username) {
+      candidates.push({
+        username: data.username,
+        token: data.token,
+        updatedAt: data.updatedAt || '',
+        source: 'device',
+        ref: doc.ref
+      });
+    }
+  });
+
+  // A token represents one physical browser. Device records take priority over
+  // legacy user fields, and the most recently updated owner wins.
+  candidates.sort((left, right) => {
+    if (left.source !== right.source) return left.source === 'device' ? 1 : -1;
+    return left.updatedAt.localeCompare(right.updatedAt);
+  });
+
+  const byToken = new Map();
+  for (const candidate of candidates) byToken.set(candidate.token, candidate);
+  return [...byToken.values()];
+}
+
+async function claimDelivery(deliveryRef, details) {
+  return db.runTransaction(async transaction => {
+    const snapshot = await transaction.get(deliveryRef);
+    if (snapshot.exists) return false;
+    transaction.create(deliveryRef, {
+      ...details,
+      status: 'sending',
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    return true;
+  });
+}
+
+async function clearInvalidRecipient(recipient) {
+  if (recipient.source === 'device') {
+    await recipient.ref.delete();
     return;
   }
+  await recipient.ref.set({ fcmToken: null, fcmTokenUpdatedAt: null }, { merge: true });
+}
 
-  // 2. Buscar atividades
-  const activitiesSnap = await db.collection('activities').get();
-  console.log(`📋 Total de atividades no Firestore: ${activitiesSnap.size}`);
+async function main() {
+  const { dateKey: todayKey, weekday } = getDateInTimeZone();
+  console.log(`▶️ Executando verificação para ${todayKey} (${weekday}, America/Sao_Paulo)`);
 
-  const datasParaVerificar = [hojeStr];
-  if (diaSemana === 1) {
-    const sabado = new Date(hojeUTC3);
-    sabado.setDate(hojeUTC3.getDate() - 2);
-    const domingo = new Date(hojeUTC3);
-    domingo.setDate(hojeUTC3.getDate() - 1);
-    datasParaVerificar.push(sabado.toISOString().split('T')[0]);
-    datasParaVerificar.push(domingo.toISOString().split('T')[0]);
-  }
+  const [usersSnapshot, activitiesSnapshot] = await Promise.all([
+    db.collection('users').get(),
+    db.collection('activities').get()
+  ]);
 
-  const pendentes = activitiesSnap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(a => a.nextDueDate && datasParaVerificar.some(d => a.nextDueDate <= d));
+  const recipients = await loadRecipients(usersSnapshot);
+  const allActivities = activitiesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const pending = getPendingActivities(allActivities, todayKey);
+  console.log(`👥 Destinos únicos: ${recipients.length}`);
+  console.log(`📌 Atividades de hoje ou atrasadas: ${pending.length}`);
 
-  console.log(`📌 Atividades pendentes identificadas: ${pendentes.length}`);
-
-  const porTecnico = {};
-  for (const atividade of pendentes) {
-    const tecnicos = atividade.assignedTo || [];
-    for (const tecnico of tecnicos) {
-      if (!porTecnico[tecnico]) porTecnico[tecnico] = [];
-      porTecnico[tecnico].push(atividade.title || 'Inspeção');
+  const byTechnician = {};
+  for (const activity of pending) {
+    for (const username of activity.assignedTo || []) {
+      if (!byTechnician[username]) byTechnician[username] = [];
+      byTechnician[username].push(activity);
     }
   }
 
-  // 3. Enviar notificação para cada técnico cadastrado
-  let totalEnviados = 0;
-  for (const tecnico of tecnicosComToken) {
-    const atividades = porTecnico[tecnico.username] || [];
-    const quantidade = atividades.length;
+  let sent = 0;
+  let skipped = 0;
 
-    let titulo = `⚠️ Inspeção Pendente (${quantidade} ${quantidade === 1 ? 'atividade' : 'atividades'})`;
-    let texto = atividades.slice(0, 3).join(', ') + (quantidade > 3 ? ` e mais ${quantidade - 3}...` : '');
+  for (const recipient of recipients) {
+    const activities = byTechnician[recipient.username] || [];
+    if (activities.length === 0) continue;
 
-    // Se não houver atividades vencidas especificamente hoje, envia notificação de confirmação
-    if (quantidade === 0) {
-      titulo = `🔔 Rota de Inspeção: Sistema Ativo`;
-      texto = `Você está registrado para receber alertas de inspeção diários às 07:35h.`;
+    const summary = summarizeActivities(activities, todayKey);
+    const title = summary.overdue.length > 0
+      ? `⚠️ Inspeções pendentes (${summary.total})`
+      : `📅 Inspeções programadas para hoje (${summary.total})`;
+    const names = activities.slice(0, 3).map(activity => activity.title || 'Inspeção');
+    const detail = summary.overdue.length > 0
+      ? `${summary.overdue.length} em atraso e ${summary.dueToday.length} para hoje. `
+      : '';
+    const body = detail + names.join(', ') + (summary.total > 3 ? ` e mais ${summary.total - 3}...` : '');
+
+    const tokenHash = hashToken(recipient.token);
+    const deliveryRef = db.collection('notificationDeliveries')
+      .doc(`${todayKey}_${tokenHash}`);
+    const claimed = await claimDelivery(deliveryRef, {
+      dateKey: todayKey,
+      username: recipient.username,
+      tokenHash,
+      activityIds: activities.map(activity => activity.id)
+    });
+
+    if (!claimed) {
+      skipped++;
+      console.log(`↩️ Envio já processado hoje para '${recipient.username}'.`);
+      continue;
     }
 
-    console.log(`🚀 Enviando Push para '${tecnico.username}' -> "${titulo}"`);
-
-    const mensagem = {
-      token: tecnico.fcmToken,
-      notification: {
-        title: titulo,
-        body: texto,
-      },
+    const message = {
+      token: recipient.token,
+      notification: { title, body },
       data: {
-        title: titulo,
-        body: texto,
+        title,
+        body,
         url: 'https://crsbabo.github.io/rota-de-inspecao/'
       },
       webpush: {
         notification: {
-          title: titulo,
-          body: texto,
+          title,
+          body,
           icon: 'https://crsbabo.github.io/rota-de-inspecao/icon.svg',
           badge: 'https://crsbabo.github.io/rota-de-inspecao/icon.svg',
           requireInteraction: true,
-          tag: 'inspecao-diaria',
-          vibrate: [200, 100, 200],
+          tag: `inspecao-diaria-${todayKey}`,
+          vibrate: [200, 100, 200]
         },
-        fcmOptions: {
-          link: 'https://crsbabo.github.io/rota-de-inspecao/',
-        },
-      },
+        fcmOptions: { link: 'https://crsbabo.github.io/rota-de-inspecao/' }
+      }
     };
 
     try {
-      const response = await messaging.send(mensagem);
-      console.log(`✅ FCM aceito! ID da mensagem: ${response}`);
-      totalEnviados++;
-    } catch (err) {
-      console.error(`❌ Erro FCM ao enviar para ${tecnico.username}:`, err.message);
-      if (err.code === 'messaging/registration-token-not-registered' ||
-          err.code === 'messaging/invalid-registration-token') {
-        await db.collection('users').doc(tecnico.username).update({ fcmToken: null });
-        console.log(`🗑️ Token inválido removido para ${tecnico.username}.`);
+      const messageId = await messaging.send(message);
+      await deliveryRef.set({
+        status: 'sent',
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+        messageId
+      }, { merge: true });
+      sent++;
+      console.log(`✅ FCM aceitou o envio para '${recipient.username}'.`);
+    } catch (error) {
+      await deliveryRef.delete();
+      console.error(`❌ Erro FCM para '${recipient.username}':`, error.message);
+      if (error.code === 'messaging/registration-token-not-registered' ||
+          error.code === 'messaging/invalid-registration-token') {
+        await clearInvalidRecipient(recipient);
+        console.log(`🗑️ Destino inválido removido para '${recipient.username}'.`);
       }
     }
   }
 
-  console.log(`\n🏁 Concluído: ${totalEnviados} notificação(ões) enviada(s).`);
+  console.log(`🏁 Concluído: ${sent} enviado(s), ${skipped} duplicado(s) evitado(s).`);
 }
 
-main().catch(err => {
-  console.error('💥 Erro fatal no script:', err);
+main().catch(error => {
+  console.error('💥 Erro fatal no script:', error);
   process.exit(1);
 });
