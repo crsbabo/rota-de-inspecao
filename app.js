@@ -920,6 +920,222 @@ function exportHistoryToPdf() {
 }
 
 // ----------------------------------------------------
+// ADMIN: ACTIVITY STATUS REPORT
+// ----------------------------------------------------
+function getActivityReportRows(records = activitiesList, users = usersList, referenceDate = new Date()) {
+  const todayKey = formatDateKey(referenceDate);
+  const userNames = new Map(users.map(user => [user.username, user.name || user.username]));
+  const statusPriority = { overdue: 0, today: 1, 'on-time': 2, 'no-date': 3 };
+
+  return records.map(activity => {
+    let statusKey = 'no-date';
+    let statusLabel = 'Sem data';
+
+    if (activity.nextDueDate) {
+      if (activity.nextDueDate < todayKey) {
+        statusKey = 'overdue';
+        statusLabel = 'Atrasada';
+      } else if (activity.nextDueDate === todayKey) {
+        statusKey = 'today';
+        statusLabel = 'Vence hoje';
+      } else {
+        statusKey = 'on-time';
+        statusLabel = 'Em dia';
+      }
+    }
+
+    const assignedUsernames = activity.assignedTo || [];
+    const technicianNames = assignedUsernames.map(username => userNames.get(username) || `@${username}`);
+
+    return {
+      id: activity.id,
+      title: activity.title || '-',
+      nextDueDate: activity.nextDueDate || '',
+      nextDueDateLabel: activity.nextDueDate ? formatDateBR(activity.nextDueDate) : '-',
+      periodicity: Number(activity.periodicity) || 0,
+      periodicityLabel: activity.periodicity ? `A cada ${activity.periodicity} dias` : '-',
+      assignedUsernames,
+      technicianNames,
+      techniciansLabel: technicianNames.length ? technicianNames.join(', ') : 'Não atribuído',
+      statusKey,
+      statusLabel,
+      statusPriority: statusPriority[statusKey]
+    };
+  }).sort((a, b) => {
+    if (a.statusPriority !== b.statusPriority) return a.statusPriority - b.statusPriority;
+    if (a.nextDueDate !== b.nextDueDate) return a.nextDueDate.localeCompare(b.nextDueDate);
+    return a.title.localeCompare(b.title, 'pt-BR');
+  });
+}
+
+function populateReportTechnicianFilter() {
+  const filter = document.getElementById('report-tech-filter');
+  if (!filter) return;
+
+  const previousValue = filter.value || 'all';
+  const technicians = usersList
+    .filter(user => user.role === 'tecnico')
+    .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username, 'pt-BR'));
+
+  filter.innerHTML = '<option value="all">Todos os técnicos</option>' + technicians
+    .map(user => `<option value="${escapeReportHtml(user.username)}">${escapeReportHtml(user.name || user.username)}</option>`)
+    .join('');
+
+  filter.value = technicians.some(user => user.username === previousValue) ? previousValue : 'all';
+}
+
+function getFilteredActivityReportRows() {
+  const rows = getActivityReportRows();
+  const statusFilter = document.getElementById('report-status-filter')?.value || 'all';
+  const techFilter = document.getElementById('report-tech-filter')?.value || 'all';
+
+  return rows.filter(row => {
+    const matchesStatus = statusFilter === 'all' || row.statusKey === statusFilter;
+    const matchesTechnician = techFilter === 'all' || row.assignedUsernames.includes(techFilter);
+    return matchesStatus && matchesTechnician;
+  });
+}
+
+function loadAdminReport() {
+  populateReportTechnicianFilter();
+
+  const allRows = getActivityReportRows();
+  document.getElementById('report-overdue-count').innerText = allRows.filter(row => row.statusKey === 'overdue').length;
+  document.getElementById('report-today-count').innerText = allRows.filter(row => row.statusKey === 'today').length;
+  document.getElementById('report-on-time-count').innerText = allRows.filter(row => row.statusKey === 'on-time').length;
+  document.getElementById('report-unassigned-count').innerText = allRows.filter(row => row.assignedUsernames.length === 0).length;
+
+  const rows = getFilteredActivityReportRows();
+  const tbody = document.getElementById('activity-report-table-body');
+  tbody.innerHTML = '';
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Nenhuma atividade encontrada para os filtros selecionados.</td></tr>';
+    return;
+  }
+
+  const badgeClassByStatus = {
+    overdue: 'badge-danger',
+    today: 'badge-warning',
+    'on-time': 'badge-success',
+    'no-date': 'badge-info'
+  };
+
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="badge ${badgeClassByStatus[row.statusKey]}">${escapeReportHtml(row.statusLabel)}</span></td>
+      <td><strong>${escapeReportHtml(row.title)}</strong></td>
+      <td>${escapeReportHtml(row.nextDueDateLabel)}</td>
+      <td>${escapeReportHtml(row.periodicityLabel)}</td>
+      <td>${escapeReportHtml(row.techniciansLabel)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function buildActivityReportCsv(rows = getFilteredActivityReportRows()) {
+  const headers = ['Situação', 'Atividade', 'Próxima inspeção', 'Periodicidade', 'Técnicos responsáveis'];
+  const dataRows = rows.map(row => [
+    row.statusLabel,
+    row.title,
+    row.nextDueDateLabel,
+    row.periodicityLabel,
+    row.techniciansLabel
+  ]);
+
+  return '\uFEFF' + [headers, ...dataRows]
+    .map(row => row.map(escapeCsvCell).join(';'))
+    .join('\r\n');
+}
+
+function exportActivityReportToExcel() {
+  const rows = getFilteredActivityReportRows();
+  if (rows.length === 0) {
+    alert('Não há atividades no relatório para exportar.');
+    return;
+  }
+
+  const filename = `relatorio-atividades-${formatDateKey(new Date())}.csv`;
+  downloadHistoryFile(buildActivityReportCsv(rows), 'text/csv;charset=utf-8;', filename);
+}
+
+function buildActivityReportPrintDocument(rows = getFilteredActivityReportRows()) {
+  const tableRows = rows.map(row => `
+    <tr>
+      <td>${escapeReportHtml(row.statusLabel)}</td>
+      <td>${escapeReportHtml(row.title)}</td>
+      <td>${escapeReportHtml(row.nextDueDateLabel)}</td>
+      <td>${escapeReportHtml(row.periodicityLabel)}</td>
+      <td>${escapeReportHtml(row.techniciansLabel)}</td>
+    </tr>
+  `).join('');
+
+  return `<!DOCTYPE html>
+  <html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8">
+    <title>Relatório de Atividades</title>
+    <style>
+      @page { size: A4 landscape; margin: 12mm; }
+      * { box-sizing: border-box; }
+      body { color: #111827; font-family: Arial, sans-serif; font-size: 10pt; margin: 0; }
+      h1 { font-size: 18pt; margin: 0 0 4px; }
+      .meta { color: #4b5563; margin: 0 0 18px; }
+      table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid; page-break-inside: avoid; }
+      th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; vertical-align: top; word-break: break-word; }
+      th { background: #1e3a5f; color: white; }
+      th:nth-child(1), td:nth-child(1) { width: 14%; }
+      th:nth-child(2), td:nth-child(2) { width: 28%; }
+      th:nth-child(3), td:nth-child(3) { width: 17%; }
+      th:nth-child(4), td:nth-child(4) { width: 17%; }
+      th:nth-child(5), td:nth-child(5) { width: 24%; }
+      tbody tr:nth-child(even) { background: #f8fafc; }
+    </style>
+  </head>
+  <body>
+    <h1>Relatório de Atividades</h1>
+    <p class="meta">${rows.length} atividade(s) - relatório gerado em ${escapeReportHtml(formatDateTime(new Date().toISOString()))}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Situação</th>
+          <th>Atividade</th>
+          <th>Próxima inspeção</th>
+          <th>Periodicidade</th>
+          <th>Técnicos responsáveis</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  </body>
+  </html>`;
+}
+
+function exportActivityReportToPdf() {
+  const rows = getFilteredActivityReportRows();
+  if (rows.length === 0) {
+    alert('Não há atividades no relatório para exportar.');
+    return;
+  }
+
+  const reportWindow = window.open('', '_blank');
+  if (!reportWindow) {
+    alert('O navegador bloqueou a janela do relatório. Permita pop-ups para salvar o PDF.');
+    return;
+  }
+
+  reportWindow.addEventListener('load', () => {
+    reportWindow.focus();
+    reportWindow.print();
+  }, { once: true });
+  reportWindow.document.write(buildActivityReportPrintDocument(rows));
+  reportWindow.document.close();
+}
+
+// ----------------------------------------------------
 // TECHNICIAN: HOME & FILTERING
 // ----------------------------------------------------
 function loadTechnicianActivities() {

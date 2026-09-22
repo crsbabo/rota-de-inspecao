@@ -75,6 +75,7 @@
         <aside class="admin-sidebar">
           <button class="sidebar-btn active" onclick="showPage('admin-activities')">📋 Atividades</button>
           <button class="sidebar-btn" onclick="showPage('admin-users'); loadAdminUsers();">👥 Técnicos</button>
+          <button class="sidebar-btn" onclick="showPage('admin-report'); loadAdminReport();">📊 Relatório</button>
           <button class="sidebar-btn" onclick="showPage('admin-history'); loadAdminHistory();">📜 Histórico</button>
         </aside>
 
@@ -100,6 +101,76 @@
             </div>
             <div id="users-cards-grid" class="grid-cards">
               <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Admin View: Activity Status Report -->
+          <div id="admin-report" class="admin-sub-page">
+            <div class="section-header report-section-header">
+              <h2>Relatório de Atividades</h2>
+              <div class="report-export-actions" aria-label="Exportar relatório de atividades">
+                <button class="btn btn-secondary btn-sm" type="button" onclick="exportActivityReportToExcel()">
+                  Exportar Excel
+                </button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="exportActivityReportToPdf()">
+                  Exportar PDF
+                </button>
+              </div>
+            </div>
+
+            <div class="report-summary-grid" aria-label="Resumo das atividades">
+              <div class="report-summary-card report-summary-overdue">
+                <span>Atrasadas</span>
+                <strong id="report-overdue-count">0</strong>
+              </div>
+              <div class="report-summary-card report-summary-today">
+                <span>Vencem hoje</span>
+                <strong id="report-today-count">0</strong>
+              </div>
+              <div class="report-summary-card report-summary-on-time">
+                <span>Em dia</span>
+                <strong id="report-on-time-count">0</strong>
+              </div>
+              <div class="report-summary-card report-summary-unassigned">
+                <span>Sem técnico</span>
+                <strong id="report-unassigned-count">0</strong>
+              </div>
+            </div>
+
+            <div class="report-filters">
+              <div class="form-group">
+                <label for="report-status-filter">Situação</label>
+                <select id="report-status-filter" class="input-control select-control" onchange="loadAdminReport()">
+                  <option value="all">Todas</option>
+                  <option value="overdue">Atrasadas</option>
+                  <option value="today">Vencem hoje</option>
+                  <option value="on-time">Em dia</option>
+                  <option value="no-date">Sem data prevista</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="report-tech-filter">Técnico</label>
+                <select id="report-tech-filter" class="input-control select-control" onchange="loadAdminReport()">
+                  <option value="all">Todos os técnicos</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Situação</th>
+                    <th>Atividade</th>
+                    <th>Próxima inspeção</th>
+                    <th>Periodicidade</th>
+                    <th>Técnicos responsáveis</th>
+                  </tr>
+                </thead>
+                <tbody id="activity-report-table-body">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
             </div>
           </div>
 

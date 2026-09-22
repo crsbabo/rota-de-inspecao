@@ -385,6 +385,63 @@ main {
   gap: 0.65rem;
 }
 
+.report-export-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.report-summary-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem 1.15rem;
+}
+
+.report-summary-card span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.report-summary-card strong {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.report-summary-overdue { border-color: rgba(239, 68, 68, 0.55); }
+.report-summary-overdue strong { color: #f87171; }
+.report-summary-today { border-color: rgba(245, 158, 11, 0.55); }
+.report-summary-today strong { color: #fbbf24; }
+.report-summary-on-time { border-color: rgba(16, 185, 129, 0.55); }
+.report-summary-on-time strong { color: #34d399; }
+.report-summary-unassigned { border-color: rgba(148, 163, 184, 0.55); }
+
+.report-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.report-filters .form-group {
+  margin-bottom: 0;
+}
+
 @media (max-width: 640px) {
   #admin-history .section-header {
     align-items: flex-start;
@@ -395,6 +452,28 @@ main {
   .history-export-actions {
     justify-content: flex-start;
     width: 100%;
+  }
+
+  .report-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .report-export-actions,
+  .report-filters {
+    width: 100%;
+  }
+
+  .report-summary-grid,
+  .report-filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1000px) {
+  .report-summary-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 }
 

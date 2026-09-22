@@ -301,6 +301,48 @@ test('printable history report includes every record and repeats the table heade
   assert.match(html, /table-header-group/);
 });
 
+test('activity report separates overdue, due today, on-time and undated activities', () => {
+  const context = createAppContext();
+  vm.runInContext(`
+    activitiesList = [
+      { id: 'a1', title: 'Atrasada', nextDueDate: '2026-09-20', periodicity: 7, assignedTo: ['cristiano'] },
+      { id: 'a2', title: 'Hoje', nextDueDate: '2026-09-21', periodicity: 3, assignedTo: ['cristiano', 'rodrigo'] },
+      { id: 'a3', title: 'Em dia', nextDueDate: '2026-09-22', periodicity: 15, assignedTo: [] },
+      { id: 'a4', title: 'Sem data', nextDueDate: '', periodicity: 30, assignedTo: ['inexistente'] }
+    ];
+    usersList = [
+      { username: 'cristiano', name: 'Cristiano Sbabo', role: 'tecnico' },
+      { username: 'rodrigo', name: 'Rodrigo Mezzomo', role: 'tecnico' }
+    ];
+  `, context);
+
+  const rows = vm.runInContext('getActivityReportRows(activitiesList, usersList, new Date(2026, 8, 21, 12))', context);
+  assert.deepEqual(Array.from(rows, row => row.statusKey), ['overdue', 'today', 'on-time', 'no-date']);
+  assert.equal(rows[1].techniciansLabel, 'Cristiano Sbabo, Rodrigo Mezzomo');
+  assert.equal(rows[2].techniciansLabel, 'Não atribuído');
+  assert.equal(rows[3].techniciansLabel, '@inexistente');
+});
+
+test('activity report exports every supplied row without touching history data', () => {
+  const context = createAppContext();
+  vm.runInContext(`
+    historyList = [{ activityTitle: 'Histórico preservado' }];
+    activitiesList = [
+      { id: 'a1', title: 'Atividade 1', nextDueDate: '2026-09-20', periodicity: 7, assignedTo: ['cristiano'] },
+      { id: 'a2', title: 'Atividade 2', nextDueDate: '2026-09-22', periodicity: 15, assignedTo: [] }
+    ];
+    usersList = [{ username: 'cristiano', name: 'Cristiano Sbabo', role: 'tecnico' }];
+  `, context);
+
+  const rows = vm.runInContext('getActivityReportRows(activitiesList, usersList, new Date(2026, 8, 21, 12))', context);
+  const csv = vm.runInContext('buildActivityReportCsv(getActivityReportRows(activitiesList, usersList, new Date(2026, 8, 21, 12)))', context);
+  assert.equal(rows.length, 2);
+  assert.match(csv, /Atividade 1/);
+  assert.match(csv, /Atividade 2/);
+  assert.equal(vm.runInContext('historyList.length', context), 1);
+  assert.equal(vm.runInContext("historyList[0].activityTitle", context), 'Histórico preservado');
+});
+
 test('a new activity uses the selected first inspection date', async () => {
   const context = createAppContext();
   const values = {
